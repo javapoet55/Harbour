@@ -2250,6 +2250,7 @@ Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none w
 
 QA report 2026-10-31 (build 15), M-01: Today's Needs attention and Calendar's "N overdue tasks overall" gave
 different counts for the same account.
+Cherry-picked for the closed-testing build from `fix/qa-oct31` (§67 there).
 
 - **What was wrong:** two rules. Today, Needs attention, the Overdue list and Reschedule all use `overdueResults`
   (`src/lib/overdueTasks.ts`, Swift's `OverdueTasks`): an unfinished, uncancelled task whose `startAt ?? dueAt` is
@@ -2274,3 +2275,74 @@ different counts for the same account.
 - **Phone check:** make a task for today a few minutes from now. After that time passes, Today's Needs attention
   and Calendar's "N overdue tasks overall" go up by one together, without leaving the Calendar tab, and the task's
   Calendar row shows **Overdue**. A task later today counts on neither.
+
+## 45. QA M-02: Night mode status-bar icons follow the app, not the phone (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-02: with the app on Night, the clock, battery and other status-bar icons stayed
+dark. It only fails with the **phone in Light mode**; every earlier phone check had the phone in Dark.
+Cherry-picked for the closed-testing build from `fix/qa-oct31` (§68 there), with stage's fixed-light screens.
+
+**How a tester reproduces it (before the fix):** phone Settings → Display → **Light** mode. In Nexdo, My Page →
+Settings → Appearance → **Night**. Force-stop Nexdo and open it again, then go to **Today**. The status-bar icons
+are dark on the black screen. With the phone in Dark mode they're white, which is why earlier checks passed.
+
+- **What was wrong:** nothing set the style again after native code put it back. The root layout drew
+  expo-status-bar's `<StatusBar style=…>` from the app theme, but React Native's `StatusBar` sends a style to native
+  **only when its own props change**, and they don't change when native code resets the icons. Two native
+  resetters follow the **phone's** theme, not the app's:
+  - **The splash screen.** We hold the native splash until `/api/me` decides (app/_layout.tsx), so JS has already
+    set the style when it goes. On Android 12+ removing the splash view puts back the system-bar appearance it saved
+    at launch, which comes from the phone's theme: dark icons with the phone in Light, light icons with it in Dark.
+    Below Android 12, `SplashScreenViewProvider.remove()` re-applies the theme's own system-bar appearance, which
+    also follows the phone. With the phone in Dark the reset matched Night, so it never showed.
+  - **The dev launcher (debug builds only):** `DevLauncherEdgeToEdgeHelper` sets
+    `isAppearanceLightStatusBars = !isDarkMode` from the phone's `uiMode`.
+- **Everything else that can set the style (checked, no change):**
+  - **Native theme:** `app.config.ts` has `userInterfaceStyle: 'automatic'`, so the generated `AppTheme`
+    (`Theme.AppCompat.DayNight.NoActionBar`, from prebuild's edge-to-edge default) follows the phone. No plugin
+    sets `android:windowLightStatusBar`: expo-status-bar's plugin isn't listed, and there's no `android/` folder
+    (CNG). The app's Night can't live in a static theme, because it's a runtime choice. So the fix is at runtime.
+  - **react-native-screens / Expo Router:** no screen sets `statusBarStyle`, so `ScreenWindowTraits` never touches
+    the style (it only does once any screen sets one, and then it falls back to `"light"` on screens without one).
+    The new guard test keeps it that way.
+  - **Modals with `statusBarTranslucent`** (Shopping's Alternatives and Recommendations sheets, Moments'
+    `MomentSheet`, Review schedule and calling guide): each dialog copies the
+    **activity's** status-bar appearance when it opens (`ReactModalHostView.updateSystemAppearance`), so they're
+    right while the activity is. None of QA's fixed-light screens opens inside a Modal, and Appearance can't be
+    changed from one.
+  - **For the team, not changed:** Moments' "How It Works" (`MomentCallingGuide`, MomentConnectSection.tsx) is a
+    full-screen Modal in the guide's own light design, so at Night it takes the activity's white icons over a light
+    sheet. It isn't on QA's list. A claim can't reach it once it's open, because the dialog copies the appearance
+    only when it opens. Giving it dark icons means claiming before it opens, and that needs a phone check.
+  - **KeyboardProvider:** react-native-keyboard-controller replaces React Native's `StatusBarManager` module. While
+    it's active, `setStyle` sets the activity window only. Open Modal windows don't get it, which is fine for the
+    reason above. It doesn't set a style of its own.
+  - **FixedLightStatusBar** (the Ask landing and Daily Brief, Pomodoro, the Calorie Tracker, the module guides,
+    calendar connect): each mounted a
+    second expo-status-bar `<StatusBar style="dark">` while focused.
+  - **expo-status-bar with edge-to-edge (SDK 57):** a thin wrapper over React Native's `StatusBar`. `translucent`
+    and `backgroundColor` do nothing edge to edge, and `style="auto"` would follow the phone. It's no longer
+    imported anywhere.
+- **The fix — one owner:** `src/components/StatusBarOwner.tsx`, mounted once in the root layout with the app's
+  scheme. It works out the style from the app's Appearance: Night gives light icons and Day gives dark ones, and
+  System follows the phone, as Swift's `preferredColorScheme(nil)` does. It sends the style with
+  `StatusBar.setBarStyle`, which goes straight to the native module. It **re-applies** on every style change, on
+  every navigation (`usePathname`), whenever the app returns to the foreground (`AppState` `active`, which also
+  covers coming back from the browser sign-in or the photo picker), and right after the splash is hidden and again
+  once its 400 ms fade is done (`reapplyAfterSplash`). No `<StatusBar>` component is mounted anywhere now.
+  `FixedLightStatusBar` keeps its name and screens but now **claims** dark icons from the owner while focused. The
+  claims are counted, so the last fixed-light screen to close hands back to the app's style.
+- Tests: `src/components/StatusBarOwner.test.tsx` covers every phone/app pair (phone Light/Dark × app
+  Night/Day/System, including the QA case of phone Light + app Night giving light icons), a live Appearance change,
+  the re-apply on foreground, on navigation and after the splash (and its cancel), and fixed-light screens getting
+  dark icons in front at Night and Day (and handing back, stepping aside unfocused, and counting two claims).
+  `statusBarOwner.guard.test.ts` checks that no other setter exists in `app/` or `src/` (expo-status-bar,
+  `<StatusBar`, `statusBarStyle`, `setBarStyle`), that the root layout mounts the owner, and that `app.config.ts`
+  sets no status-bar style. `statusBar.test.tsx` and `ask.test.tsx` now check the claim instead of the old
+  component.
+- **Phone check (needs a build with this commit; JS only, no native rebuild):** for each of phone Light and phone
+  Dark, with app **Night**: cold start → Today has **white** icons; Calendar, Tasks, My Page and Settings stay white;
+  background the app for a few seconds and come back, still white; open Shopping's Recommendations sheet, still
+  white. Open Ask AI (landing and a Daily Brief), Wellness → Pomodoro, the Calorie Tracker, a module guide and
+  calendar connect: **dark** icons on those white screens, then **white** again on Back. With app **Day**: dark icons everywhere. With app
+  **System**: icons follow the phone.
