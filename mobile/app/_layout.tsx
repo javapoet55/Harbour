@@ -1,7 +1,6 @@
 import { focusManager, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, AppState, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,6 +11,7 @@ import { useCoordinator } from '../src/actions/coordinator';
 import { useActionNotifications } from '../src/actions/useActionNotifications';
 import { onSignedOut } from '../src/api';
 import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
+import { reapplyAfterSplash, StatusBarOwner } from '../src/components/StatusBarOwner';
 import { useMomentsLifecycle } from '../src/features/moments/useMomentsLifecycle';
 import { usePomodoroLifecycle } from '../src/features/pomodoro/usePomodoroNotificationRoute';
 import { useShoppingLifecycle } from '../src/features/shopping/useShoppingLifecycle';
@@ -141,13 +141,26 @@ export function RootNavigator() {
 
   // Release the native splash once the launch is decided (signed in, signed out, or the error screen),
   // one frame late so the screen it reveals has already drawn. `hide()` is a no-op once hidden.
+  // Hiding it also puts the status bar back as it was at launch, so the owner re-applies it (§68).
   useEffect(() => {
+    let cancelReapply: (() => void) | undefined;
+    const hide = () => {
+      SplashScreen.hide();
+      cancelReapply?.();
+      cancelReapply = reapplyAfterSplash();
+    };
     if (launchUndecided) {
-      const limit = setTimeout(SplashScreen.hide, SPLASH_HOLD_LIMIT_MS);
-      return () => clearTimeout(limit);
+      const limit = setTimeout(hide, SPLASH_HOLD_LIMIT_MS);
+      return () => {
+        clearTimeout(limit);
+        cancelReapply?.();
+      };
     }
-    const frame = requestAnimationFrame(SplashScreen.hide);
-    return () => cancelAnimationFrame(frame);
+    const frame = requestAnimationFrame(hide);
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelReapply?.();
+    };
   }, [launchUndecided]);
 
   /**
@@ -221,7 +234,8 @@ export function RootNavigator() {
   return (
     // The whole app, so a bug report's screenshot is what was on screen when it opened.
     <View collapsable={false} ref={bugReportRoot} style={[styles.root, { backgroundColor: theme.colors.groupedBackground }]}>
-      <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
+      {/* The only status-bar style setter (§68): the app's Appearance, never the phone's theme. */}
+      <StatusBarOwner scheme={theme.scheme} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.groupedBackground } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={status === 'signedIn'}>
