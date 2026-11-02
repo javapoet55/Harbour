@@ -2344,5 +2344,19 @@ are dark on the black screen. With the phone in Dark mode they're white, which i
   Dark, with app **Night**: cold start → Today has **white** icons; Calendar, Tasks, My Page and Settings stay white;
   background the app for a few seconds and come back, still white; open Shopping's Recommendations sheet, still
   white. Open Ask AI (landing and a Daily Brief), Wellness → Pomodoro, the Calorie Tracker, a module guide and
-  calendar connect: **dark** icons on those white screens, then **white** again on Back. With app **Day**: dark icons everywhere. With app
-  **System**: icons follow the phone.
+  calendar connect: **dark** icons on those white screens, then **white** again on Back. With app **Day**: dark
+  icons everywhere. With app **System**: icons follow the phone.
+
+## 46. QA S-01: "Nexdo" in the Wellness quote (2026-11-02)
+
+QA report 2026-10-31 (build 15), S-01. The Wellness chooser's quote now reads "“A more organized you, a brighter
+tomorrow.” — **Nexdo**" (was "NexDo"), in `src/features/wellness/WellnessChooser.tsx`. Cherry-picked for the
+closed-testing build from `fix/qa-oct31` (§70 there).
+
+- **iOS differs:** Swift still says "— NexDo" (WellnessChooserView.swift:32).
+- **For the team, not changed:** "NexDo" is still the spelling in about 30 other strings, including the bug
+  report, Calendar connect, the Calorie Tracker, the module guides and Moments' calling guide.
+  S-01 named only the quote. If the brand spelling is now "Nexdo" everywhere, that's a separate copy pass, and it
+  should go to Swift as well.
+- Tests: `chooser.test.tsx` checks the new spelling.
+- **Phone check:** open Wellness. The quote card ends with "— Nexdo".
