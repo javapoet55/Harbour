@@ -25,7 +25,7 @@ describe('Wellness chooser', () => {
     expect(pomodoro.getByText('Focus  ·  Be productive  ·  Get more done')).toBeTruthy();
     expect(screen.getByText('Track your meals, goals & nutrition')).toBeTruthy();
     expect(screen.getByText('Birthdays  ·  Festivals  ·  Special occasions')).toBeTruthy();
-    expect(screen.getByText('“A more organized you,\na brighter tomorrow.” — NexDo')).toBeTruthy();
+    expect(screen.getByText('“A more organized you,\na brighter tomorrow.” — Nexdo')).toBeTruthy();
   });
 
   it('opens a module from its card', async () => {

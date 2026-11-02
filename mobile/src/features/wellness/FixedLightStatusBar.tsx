@@ -1,16 +1,19 @@
-import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from 'expo-router';
+import { useEffect } from 'react';
+
+import { claimFixedLight } from '../../components/StatusBarOwner';
 
 /**
- * Dark status-bar content while a fixed-light Wellness screen (a module guide) is in front. The chooser
- * follows the theme since 4185501, and with it the root layout's status bar.
+ * Dark status-bar content while a fixed-light screen (a module guide, the Daily Brief, the
+ * introduction, calendar connect) is in front. The chooser follows the theme since 4185501.
  *
- * The root layout picks the status bar from the theme, so in dark mode it would draw a white clock over
- * these white screens. Swift keeps it dark there (`wellness-chooser-dark`, `module-guide-shopping-dark`).
- * Only while FOCUSED: `expo-status-bar` lets the last-mounted bar win, and the chooser stays mounted
- * under Moments and Shopping, which follow the theme.
+ * The root layout's `StatusBarOwner` picks the status bar from the app's Appearance, so at Night it
+ * would draw a white clock over these white screens. Swift keeps it dark there (`wellness-chooser-dark`,
+ * `module-guide-shopping-dark`). This claims dark icons from the owner only while FOCUSED: the chooser
+ * stays mounted under Moments and Shopping, which follow the theme (docs/android-polish.md §68).
  */
 export function FixedLightStatusBar() {
   const focused = useIsFocused();
-  return focused ? <StatusBar style="dark" /> : null;
+  useEffect(() => (focused ? claimFixedLight() : undefined), [focused]);
+  return null;
 }

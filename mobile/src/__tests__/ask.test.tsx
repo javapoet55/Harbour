@@ -17,8 +17,9 @@ jest.mock('expo-router', () => ({
   useIsFocused: () => mockFocused(),
   Redirect: () => null,
 }));
-const mockStatusBar = jest.fn((_props: { style: string }) => null);
-jest.mock('expo-status-bar', () => ({ StatusBar: (props: { style: string }) => mockStatusBar(props) }));
+// The Daily Brief's claim on the root layout's `StatusBarOwner` (android-polish.md §68).
+const mockClaim = jest.fn(() => () => undefined);
+jest.mock('../components/StatusBarOwner', () => ({ claimFixedLight: () => mockClaim() }));
 
 const mockAssistant = jest.fn();
 const mockTasks = jest.fn();
@@ -89,7 +90,7 @@ async function askTyped(text: string) {
 beforeEach(() => {
   mockParams = {};
   mockFocused.mockReturnValue(true);
-  mockStatusBar.mockClear();
+  mockClaim.mockClear();
   mockPush.mockClear();
   mockBack.mockClear();
   mockAssistant.mockReset();
@@ -110,14 +111,14 @@ describe('the Ask AI status bar', () => {
   it('leaves the landing to the root bar, which follows the theme', async () => {
     await show(<Ask />);
     expect(screen.getByText('How can I help you today?')).toBeTruthy();
-    expect(mockStatusBar).not.toHaveBeenCalled();
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 
   it('asks for dark status-bar content on the fixed-light Daily Brief while Ask is in front', async () => {
     mockAssistant.mockResolvedValue(turn());
     await show(<Ask />);
     await fireEvent.press(screen.getByTestId('ask-card-0'));
-    await waitFor(() => expect(mockStatusBar).toHaveBeenCalledWith({ style: 'dark' }));
+    await waitFor(() => expect(mockClaim).toHaveBeenCalled());
   });
 
   it('draws no status bar while Ask is not focused, so the root bar follows the theme', async () => {
@@ -126,12 +127,12 @@ describe('the Ask AI status bar', () => {
     await show(<Ask />);
     await fireEvent.press(screen.getByTestId('ask-card-0'));
     await waitFor(() => expect(mockAssistant).toHaveBeenCalled());
-    expect(mockStatusBar).not.toHaveBeenCalled();
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 
   it('draws none on a themed page (Shopping Recommendations)', async () => {
     await show(<AskNexdoView textPage shoppingContext={{ listName: 'Groceries', itemNames: ['Milk'] }} onClose={jest.fn()} />);
-    expect(mockStatusBar).not.toHaveBeenCalled();
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 });
 

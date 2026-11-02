@@ -11,11 +11,8 @@ export function overdueResults(tasks: NexdoTask[], now: number = Date.now()): Ne
   const withDeadline: { task: NexdoTask; deadline: number }[] = [];
 
   for (const task of tasks) {
-    if (isDone(task) || task.status === 'CANCELLED') continue;
-    const value = task.startAt ?? task.dueAt;
-    if (!value) continue;
-    const deadline = parseServerDate(value);
-    if (deadline === null || deadline >= now) continue;
+    const deadline = overdueDeadline(task, now);
+    if (deadline === null) continue;
     withDeadline.push({ task, deadline });
   }
 
@@ -30,6 +27,24 @@ export function overdueResults(tasks: NexdoTask[], now: number = Date.now()): Ne
         : left.deadline - right.deadline,
     )
     .map((entry) => entry.task);
+}
+
+/**
+ * The effective timestamp (`startAt ?? dueAt`) of an unfinished task that is before `now`, or `null`
+ * when the task isn't overdue. Today, Needs attention and Calendar all use this one rule
+ * (docs/android-polish.md §67).
+ */
+function overdueDeadline(task: NexdoTask, now: number): number | null {
+  if (isDone(task) || task.status === 'CANCELLED') return null;
+  const value = task.startAt ?? task.dueAt;
+  if (!value) return null;
+  const deadline = parseServerDate(value);
+  return deadline === null || deadline >= now ? null : deadline;
+}
+
+/** One task against `overdueResults`' rule. */
+export function isOverdue(task: NexdoTask, now: number = Date.now()): boolean {
+  return overdueDeadline(task, now) !== null;
 }
 
 /** `deadlineLabel(_:task:)` (ios/App/OverdueTasksView.swift:6-13): medium date, short time. */

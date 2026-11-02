@@ -2797,3 +2797,141 @@ left with hardware Back, which doesn't save. No account was created; the existin
   Skip) is the Expo dev client's floating tools button. It isn't in release builds.
 - **Install note:** `pm clear` is refused over adb on this OnePlus, so the first-install state came from uninstalling
   and reinstalling the debug APK. The phone asks to confirm a USB install the first time.
+
+## 67. QA M-01: Calendar's overdue count matches Today — ANDROID AHEAD (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-01: Today's Needs attention and Calendar's "N overdue tasks overall" gave
+different counts for the same account.
+
+- **What was wrong:** two rules. Today, Needs attention, the Overdue list and Reschedule all use `overdueResults`
+  (`src/lib/overdueTasks.ts`, Swift's `OverdueTasks`): an unfinished, uncancelled task whose `startAt ?? dueAt` is
+  before **now**. Calendar used `calendarOverdue` (`src/lib/calendarDates.ts`, Swift's `CalendarView.overdue(_:)`,
+  CalendarView.swift:96-99): the `dueAt` **day** is before today, and `startAt` is ignored. So a task today at
+  5:31 AM was overdue on Today at 6:00 AM but not on Calendar, and a task due yesterday that starts tonight was the
+  other way round. Calendar's `now` was also fixed at the time the tab first mounted, so even a matching rule would
+  have gone stale while the tab stayed open.
+- **ANDROID AHEAD — iOS has the same mismatch (for the team list):** `calendarOverdue` now calls the shared
+  `isOverdue` (`overdueTasks.ts`), the same rule `overdueResults` uses, and drops its time-zone argument. Swift's
+  `CalendarView.overdue(_:)` still uses the due day, so iOS Calendar and Today can still disagree.
+- **Everything on Calendar follows**, since it all goes through `calendarOverdue`: the summary's "N overdue tasks
+  overall", the timeline row's tone, document glyph and **Overdue** tag (`rowTone`/`rowSymbol`, which drop their
+  unused time-zone argument, as does `CalendarTimelineRow`), the backlog's Overdue badge, and the month grid's
+  amber dot.
+- **Calendar's clock ticks once a minute**, as Today's `queueNow` does, so a task turns overdue while the tab is
+  open.
+- Tests: `calendarDates.test.ts` (5:31 AM overdue at 6:00 AM and 11 PM not, by `startAt` or `dueAt`; Calendar and
+  `overdueResults` pick the same tasks, including the two the old rule got wrong; the row's tone and glyph at
+  6:00 AM); `weeklySummary.test.ts` (`overdueResults` at 6:00 AM); `calendar.test.tsx` (the summary goes from 0 to
+  1 overdue when the clock passes 6:00 AM, with the Overdue tag on the 5:31 row only).
+- **Phone check:** make a task for today a few minutes from now. After that time passes, Today's Needs attention
+  and Calendar's "N overdue tasks overall" go up by one together, without leaving the Calendar tab, and the task's
+  Calendar row shows **Overdue**. A task later today counts on neither.
+
+## 68. QA M-02: Night mode status-bar icons follow the app, not the phone (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-02: with the app on Night, the clock, battery and other status-bar icons stayed
+dark. It only fails with the **phone in Light mode**; every earlier check had the phone in Dark (§66).
+
+**How a tester reproduces it (before the fix):** phone Settings → Display → **Light** mode. In Nexdo, My Page →
+Settings → Appearance → **Night**. Force-stop Nexdo and open it again, then go to **Today**. The status-bar icons
+are dark on the black screen. With the phone in Dark mode they're white, which is why §66 passed.
+
+- **What was wrong:** nothing set the style again after native code put it back. The root layout drew
+  expo-status-bar's `<StatusBar style=…>` from the app theme, but React Native's `StatusBar` sends a style to native
+  **only when its own props change**, and they don't change when native code resets the icons. Two native
+  resetters follow the **phone's** theme, not the app's:
+  - **The splash screen.** We hold the native splash until `/api/me` decides (app/_layout.tsx), so JS has already
+    set the style when it goes. On Android 12+ removing the splash view puts back the system-bar appearance it saved
+    at launch, which comes from the phone's theme: dark icons with the phone in Light, light icons with it in Dark.
+    Below Android 12, `SplashScreenViewProvider.remove()` re-applies the theme's own system-bar appearance, which
+    also follows the phone. With the phone in Dark the reset matched Night, so it never showed.
+  - **The dev launcher (debug builds only):** `DevLauncherEdgeToEdgeHelper` sets
+    `isAppearanceLightStatusBars = !isDarkMode` from the phone's `uiMode`.
+- **Everything else that can set the style (checked, no change):**
+  - **Native theme:** `app.config.ts` has `userInterfaceStyle: 'automatic'`, so the generated `AppTheme`
+    (`Theme.AppCompat.DayNight.NoActionBar`, from prebuild's edge-to-edge default) follows the phone. No plugin
+    sets `android:windowLightStatusBar`: expo-status-bar's plugin isn't listed, and there's no `android/` folder
+    (CNG). The app's Night can't live in a static theme, because it's a runtime choice. So the fix is at runtime.
+  - **react-native-screens / Expo Router:** no screen sets `statusBarStyle`, so `ScreenWindowTraits` never touches
+    the style (it only does once any screen sets one, and then it falls back to `"light"` on screens without one).
+    The new guard test keeps it that way.
+  - **Modals with `statusBarTranslucent`** (Shopping's Alternatives and Recommendations sheets, Moments'
+    `MomentSheet`, Review schedule and calling guide, Calendar's connect offer): each dialog copies the
+    **activity's** status-bar appearance when it opens (`ReactModalHostView.updateSystemAppearance`), so they're
+    right while the activity is. None of QA's fixed-light screens opens inside a Modal, and Appearance can't be
+    changed from one.
+  - **For the team, not changed:** Moments' "How It Works" (`MomentCallingGuide`, MomentConnectSection.tsx) is a
+    full-screen Modal in the guide's own light design, so at Night it takes the activity's white icons over a light
+    sheet. It isn't on QA's list. A claim can't reach it once it's open, because the dialog copies the appearance
+    only when it opens. Giving it dark icons means claiming before it opens, and that needs a phone check.
+  - **KeyboardProvider:** react-native-keyboard-controller replaces React Native's `StatusBarManager` module. While
+    it's active, `setStyle` sets the activity window only. Open Modal windows don't get it, which is fine for the
+    reason above. It doesn't set a style of its own.
+  - **FixedLightStatusBar** (module guides, the Daily Brief, the introduction, calendar connect): each mounted a
+    second expo-status-bar `<StatusBar style="dark">` while focused.
+  - **expo-status-bar with edge-to-edge (SDK 57):** a thin wrapper over React Native's `StatusBar`. `translucent`
+    and `backgroundColor` do nothing edge to edge, and `style="auto"` would follow the phone. It's no longer
+    imported anywhere.
+- **The fix — one owner:** `src/components/StatusBarOwner.tsx`, mounted once in the root layout with the app's
+  scheme. It works out the style from the app's Appearance: Night gives light icons and Day gives dark ones, and
+  System follows the phone, as Swift's `preferredColorScheme(nil)` does. It sends the style with
+  `StatusBar.setBarStyle`, which goes straight to the native module. It **re-applies** on every style change, on
+  every navigation (`usePathname`), whenever the app returns to the foreground (`AppState` `active`, which also
+  covers coming back from the browser sign-in or the photo picker), and right after the splash is hidden and again
+  once its 400 ms fade is done (`reapplyAfterSplash`). No `<StatusBar>` component is mounted anywhere now.
+  `FixedLightStatusBar` keeps its name and screens but now **claims** dark icons from the owner while focused. The
+  claims are counted, so the last fixed-light screen to close hands back to the app's style.
+- Tests: `src/components/StatusBarOwner.test.tsx` covers every phone/app pair (phone Light/Dark × app
+  Night/Day/System, including the QA case of phone Light + app Night giving light icons), a live Appearance change,
+  the re-apply on foreground, on navigation and after the splash (and its cancel), and fixed-light screens getting
+  dark icons in front at Night and Day (and handing back, stepping aside unfocused, and counting two claims).
+  `statusBarOwner.guard.test.ts` checks that no other setter exists in `app/` or `src/` (expo-status-bar,
+  `<StatusBar`, `statusBarStyle`, `setBarStyle`), that the root layout mounts the owner, and that `app.config.ts`
+  sets no status-bar style. `statusBar.test.tsx` and `ask.test.tsx` now check the claim instead of the old
+  component.
+- **Phone check (needs a build with this commit; JS only, no native rebuild):** for each of phone Light and phone
+  Dark, with app **Night**: cold start → Today has **white** icons; Calendar, Tasks, My Page and Settings stay white;
+  background the app for a few seconds and come back, still white; open Shopping's Recommendations sheet, still
+  white. Open the Daily Brief from Ask, a module guide (Calorie Tracker or Shopping), and calendar connect: **dark**
+  icons on those white screens, then **white** again on Back. With app **Day**: dark icons everywhere. With app
+  **System**: icons follow the phone.
+
+## 69. QA M-03: Ask AI and Pomodoro follow Night — confirmed, and Pomodoro's cover (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-03: Ask AI and Pomodoro stayed white with the app on Night. Phase 14, on develop
+since the merge `d4a9392`, was meant to fix both.
+
+- **Confirmed in code, no change:** Ask follows the app's Appearance. The `app/ask` stack's cover is
+  `theme.colors.background`, the landing draws the theme base, ink and field (§61), and `AskNexdoView` puts the
+  white base only behind the Daily Brief, which stays fixed light (§24 lists no change to it), as does a brief
+  section's cover. Pomodoro's timer, setup, completion and dashboard take `usePomodoroColors`, which reads
+  `useTheme`, so they follow Night too (ce6d20a, §24 "Pomodoro setup and dashboard: dark mode"). Both read the
+  app's Appearance, not the phone's, so they're dark at Night with the phone in Light as well.
+- **Confirmed in tests:** `ask.test.tsx` "follows the dark theme" (Night: the dark base, ink, caption and
+  placeholder) and `pomodoro/__tests__/screens.test.tsx` "dark mode (ce6d20a)" (Night: the black dashboard and
+  dark cards, and setup's dark cards).
+- **Fixed — Pomodoro's cover:** the Wellness stack gives every cover a white `contentStyle`, and only the chooser
+  had a themed one (4185501). Pomodoro's views cover it once drawn, but at Night the cover still slid in **white**
+  before Pomodoro's black page appeared. Pomodoro now shares the chooser's themed cover (`themedCover` in
+  `app/wellness/_layout.tsx`: black at Night, white by Day). The guides and the Calorie Tracker keep the white
+  cover, because they're fixed light.
+- Tests: `src/features/wellness/__tests__/wellnessLayout.test.tsx` (the chooser's and Pomodoro's covers are black at
+  Night and white by Day; the guides and the Calorie Tracker stay on the white cover).
+- **If QA still sees white Ask or Pomodoro screens**, check that build 15 was made from `d4a9392` or later. Before
+  Phase 14, both were fixed light by design.
+- **Phone check:** app on Night, with the phone in Light and then in Dark. Open Ask AI from the tab bar: a dark
+  landing (the Daily Brief stays white, with dark status-bar icons, §68). Open Wellness → Pomodoro: no white flash
+  while it slides in, then a dark timer. Open its dashboard: dark too.
+
+## 70. QA S-01: "Nexdo" in the Wellness quote (2026-11-02)
+
+QA report 2026-10-31 (build 15), S-01. The Wellness chooser's quote now reads "“A more organized you, a brighter
+tomorrow.” — **Nexdo**" (was "NexDo"), in `src/features/wellness/WellnessChooser.tsx`.
+
+- **iOS differs:** Swift still says "— NexDo" (WellnessChooserView.swift:32).
+- **For the team, not changed:** "NexDo" is still the spelling in about 40 other strings, including the sign-up
+  and introduction headers, the bug report, Calendar connect, the Calorie Tracker and Moments' calling guide.
+  S-01 named only the quote. If the brand spelling is now "Nexdo" everywhere, that's a separate copy pass, and it
+  should go to Swift as well.
+- Tests: `chooser.test.tsx` checks the new spelling.
+- **Phone check:** open Wellness. The quote card ends with "— Nexdo".
