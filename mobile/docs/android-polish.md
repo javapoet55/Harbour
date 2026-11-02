@@ -2895,3 +2895,30 @@ are dark on the black screen. With the phone in Dark mode they're white, which i
   white. Open the Daily Brief from Ask, a module guide (Calorie Tracker or Shopping), and calendar connect: **dark**
   icons on those white screens, then **white** again on Back. With app **Day**: dark icons everywhere. With app
   **System**: icons follow the phone.
+
+## 69. QA M-03: Ask AI and Pomodoro follow Night — confirmed, and Pomodoro's cover (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-03: Ask AI and Pomodoro stayed white with the app on Night. Phase 14, on develop
+since the merge `d4a9392`, was meant to fix both.
+
+- **Confirmed in code, no change:** Ask follows the app's Appearance. The `app/ask` stack's cover is
+  `theme.colors.background`, the landing draws the theme base, ink and field (§61), and `AskNexdoView` puts the
+  white base only behind the Daily Brief, which stays fixed light (§24 lists no change to it), as does a brief
+  section's cover. Pomodoro's timer, setup, completion and dashboard take `usePomodoroColors`, which reads
+  `useTheme`, so they follow Night too (ce6d20a, §24 "Pomodoro setup and dashboard: dark mode"). Both read the
+  app's Appearance, not the phone's, so they're dark at Night with the phone in Light as well.
+- **Confirmed in tests:** `ask.test.tsx` "follows the dark theme" (Night: the dark base, ink, caption and
+  placeholder) and `pomodoro/__tests__/screens.test.tsx` "dark mode (ce6d20a)" (Night: the black dashboard and
+  dark cards, and setup's dark cards).
+- **Fixed — Pomodoro's cover:** the Wellness stack gives every cover a white `contentStyle`, and only the chooser
+  had a themed one (4185501). Pomodoro's views cover it once drawn, but at Night the cover still slid in **white**
+  before Pomodoro's black page appeared. Pomodoro now shares the chooser's themed cover (`themedCover` in
+  `app/wellness/_layout.tsx`: black at Night, white by Day). The guides and the Calorie Tracker keep the white
+  cover, because they're fixed light.
+- Tests: `src/features/wellness/__tests__/wellnessLayout.test.tsx` (the chooser's and Pomodoro's covers are black at
+  Night and white by Day; the guides and the Calorie Tracker stay on the white cover).
+- **If QA still sees white Ask or Pomodoro screens**, check that build 15 was made from `d4a9392` or later. Before
+  Phase 14, both were fixed light by design.
+- **Phone check:** app on Night, with the phone in Light and then in Dark. Open Ask AI from the tab bar: a dark
+  landing (the Daily Brief stays white, with dark status-bar icons, §68). Open Wellness → Pomodoro: no white flash
+  while it slides in, then a dark timer. Open its dashboard: dark too.

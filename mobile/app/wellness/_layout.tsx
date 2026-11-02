@@ -38,13 +38,15 @@ export default function WellnessLayout() {
   // the root's indigo tint (WellnessChooserView.swift:54, `moments-date-filter-today-empty`,
   // `shopping-lists-v2`); deeper pushes keep the system back, in ink.
   const moduleRoot = { ...pushed, headerLeft: () => <GlassBackButton tint={theme.colors.link} /> };
+  // The chooser (4185501) and Pomodoro (ce6d20a) follow the theme, so their covers do too while they slide
+  // in; the guides and the Calorie Tracker keep the white cover (docs/android-polish.md §69).
+  const themedCover = { contentStyle: { backgroundColor: theme.scheme === 'dark' ? '#000000' : '#FFFFFF' } };
 
   return (
     <Stack screenOptions={{ headerShown: false, presentation: 'fullScreenModal', contentStyle: { backgroundColor: '#FFFFFF' } }}>
-      {/* The chooser follows the theme (4185501), so its cover does too while it slides in. */}
-      <Stack.Screen name="index" options={{ contentStyle: { backgroundColor: theme.scheme === 'dark' ? '#000000' : '#FFFFFF' } }} />
+      <Stack.Screen name="index" options={themedCover} />
       <Stack.Screen name="guide/[kind]" />
-      <Stack.Screen name="pomodoro" />
+      <Stack.Screen name="pomodoro" options={themedCover} />
       <Stack.Screen name="calories" />
 
       {/*
