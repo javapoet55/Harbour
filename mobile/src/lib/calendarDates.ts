@@ -1,4 +1,5 @@
 import type { CalendarEvent, NexdoTask } from '../api/types';
+import { isOverdue } from './overdueTasks';
 import { eventOccursOn } from './todaySchedule';
 import { addDays, dayKey, isDone, parseServerDate, standardContains, startOfDay } from './taskQuery';
 
@@ -121,12 +122,14 @@ export function shiftSelected(mode: CalendarMode, selected: number, direction: n
   return startOfDay(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(date, lastDay), 12), timeZone);
 }
 
-/** `overdue(_:)` (CalendarView.swift:46-49): a due date strictly before today, on an unfinished task. */
-export function calendarOverdue(task: NexdoTask, timeZone: string, now: number = Date.now()): boolean {
-  if (isDone(task)) return false;
-  const due = parseServerDate(task.dueAt);
-  if (due === null) return false;
-  return dayKey(due, timeZone) < dayKey(now, timeZone);
+/**
+ * `overdue(_:)` (CalendarView.swift:96-99). ANDROID AHEAD (docs/android-polish.md §67): Swift counts a
+ * task overdue when its due DAY is before today and ignores `startAt`, so Calendar's "N overdue tasks
+ * overall" disagreed with Today's Needs attention. Android uses Today's rule, `overdueResults`: an
+ * unfinished task whose `startAt ?? dueAt` is before `now`.
+ */
+export function calendarOverdue(task: NexdoTask, now: number = Date.now()): boolean {
+  return isOverdue(task, now);
 }
 
 /** `scheduled(_:_:)` (CalendarView.swift:414): the task STARTS on this day, rather than being due. */

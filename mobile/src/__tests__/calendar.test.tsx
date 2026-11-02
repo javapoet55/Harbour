@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert, Platform, StyleSheet } from 'react-native';
 
 import { ApiError } from '../api/client';
@@ -224,6 +224,29 @@ describe('Calendar tab', () => {
     await renderCalendar();
     // Two items on the 16th plus one on the 17th, and one deadline.
     await waitFor(() => expect(screen.getByText('4 items · 1 deadline')).toBeTruthy());
+  });
+
+  it('counts overdue tasks overall by Today’s rule, and its clock ticks (QA M-01, §67)', async () => {
+    jest.setSystemTime(Date.parse(atLocal('2026-09-16', '05:00')));
+    const tasks = [
+      task({ id: 'early', title: 'Early task', startAt: atLocal('2026-09-16', '05:31') }),
+      task({ id: 'night', title: 'Night task', startAt: atLocal('2026-09-16', '23:00') }),
+    ];
+    mockTasks.mockResolvedValue({ tasks, timeZone: ZONE });
+    mockAgenda.mockResolvedValue({ ...AGENDA, tasks });
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByText(/^0 overdue tasks overall/)).toBeTruthy());
+    expect(screen.queryByText('Overdue')).toBeNull();
+
+    // Still open at 6:00 AM: the 5:31 task is overdue here as on Today; the 11 PM one isn't.
+    await act(async () => {
+      jest.setSystemTime(Date.parse(atLocal('2026-09-16', '06:00')));
+      jest.advanceTimersByTime(60_000);
+    });
+    await waitFor(() => expect(screen.getByText(/^1 overdue tasks overall/)).toBeTruthy());
+    expect(screen.getByTestId('calendar-row-task:early').props.accessibilityLabel).toContain('Early task');
+    expect(within(screen.getByTestId('calendar-row-task:early')).getByText('Overdue')).toBeTruthy();
+    expect(within(screen.getByTestId('calendar-row-task:night')).queryByText('Overdue')).toBeNull();
   });
 
   it('opens a task from a row and Appointment details from an event row', async () => {

@@ -13,6 +13,7 @@ import {
   visibleDays,
 } from './calendarDates';
 import { calendarRows, rowSymbol, rowTone } from './calendarRows';
+import { overdueResults } from './overdueTasks';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */
@@ -199,16 +200,40 @@ describe('calendarEventMatches', () => {
   });
 });
 
-/** `overdue(_:)` and `scheduled(_:_:)` (CalendarView.swift:46-49, 414). */
+/**
+ * `overdue(_:)` and `scheduled(_:_:)` (CalendarView.swift:96-99, 414). ANDROID AHEAD (§67): Calendar's
+ * overdue rule is Today's `overdueResults`, so the two screens count the same tasks.
+ */
 describe('calendarOverdue and taskScheduledOn', () => {
-  it('is overdue only when the due DAY is before today', () => {
-    expect(calendarOverdue(task({ id: 'a', dueAt: atLocal('2026-09-15') }), ZONE, NOW)).toBe(true);
-    // Later today still counts as today, so not overdue.
-    expect(calendarOverdue(task({ id: 'a', dueAt: atLocal('2026-09-16', '23:00') }), ZONE, NOW)).toBe(false);
+  /** 06:00 on the 16th in the account zone: QA M-01 was checked at 6:00 AM. */
+  const SIX_AM = Date.parse(atLocal('2026-09-16', '06:00'));
+
+  it('is overdue once the task’s time has passed, not only on an earlier day', () => {
+    expect(calendarOverdue(task({ id: 'a', dueAt: atLocal('2026-09-15') }), NOW)).toBe(true);
+    expect(calendarOverdue(task({ id: 'a', dueAt: atLocal('2026-09-16', '05:31') }), SIX_AM)).toBe(true);
+    expect(calendarOverdue(task({ id: 'a', startAt: atLocal('2026-09-16', '05:31') }), SIX_AM)).toBe(true);
+    // Later today hasn't happened yet.
+    expect(calendarOverdue(task({ id: 'a', dueAt: atLocal('2026-09-16', '23:00') }), SIX_AM)).toBe(false);
+    expect(calendarOverdue(task({ id: 'a', startAt: atLocal('2026-09-16', '23:00') }), SIX_AM)).toBe(false);
+  });
+
+  it('agrees with overdueResults, which Today and Needs attention count', () => {
+    const tasks = [
+      task({ id: 'early', startAt: atLocal('2026-09-16', '05:31') }),
+      task({ id: 'late', startAt: atLocal('2026-09-16', '23:00') }),
+      // Swift's Calendar counted this one (due yesterday) although it starts tonight; Today doesn't.
+      task({ id: 'started-later', startAt: atLocal('2026-09-16', '23:00'), dueAt: atLocal('2026-09-15') }),
+      // And missed this one (starts before now, due tomorrow); Today counts it.
+      task({ id: 'started-earlier', startAt: atLocal('2026-09-16', '05:00'), dueAt: atLocal('2026-09-17') }),
+      task({ id: 'cancelled', status: 'CANCELLED', dueAt: atLocal('2026-09-15') }),
+    ];
+    const today = overdueResults(tasks, SIX_AM).map((each) => each.id);
+    expect(today).toEqual(['started-earlier', 'early']);
+    expect(tasks.filter((each) => calendarOverdue(each, SIX_AM)).map((each) => each.id).sort()).toEqual([...today].sort());
   });
 
   it('is never overdue once complete', () => {
-    expect(calendarOverdue(task({ id: 'a', status: 'COMPLETED', dueAt: atLocal('2026-09-01') }), ZONE, NOW)).toBe(false);
+    expect(calendarOverdue(task({ id: 'a', status: 'COMPLETED', dueAt: atLocal('2026-09-01') }), NOW)).toBe(false);
   });
 
   it('distinguishes a scheduled task from a due one', () => {
@@ -309,21 +334,30 @@ describe('rowTone and rowSymbol', () => {
     calendarRows({ tasks: [task({ id: 't', startAt: atLocal('2026-09-16', '09:00'), ...overrides })], events: [], day, timeZone: ZONE, now: NOW })[0];
 
   it('prefers critical over late', () => {
-    expect(rowTone(rowFor({ critical: true, dueAt: atLocal('2026-09-01') }), ZONE, NOW)).toBe('critical');
+    expect(rowTone(rowFor({ critical: true, dueAt: atLocal('2026-09-01') }), NOW)).toBe('critical');
   });
 
   it('marks an overdue task late', () => {
-    expect(rowTone(rowFor({ dueAt: atLocal('2026-09-01') }), ZONE, NOW)).toBe('late');
+    expect(rowTone(rowFor({ startAt: atLocal('2026-09-16', '08:00') }), NOW)).toBe('late');
   });
 
   it('is normal otherwise', () => {
-    expect(rowTone(rowFor({}), ZONE, NOW)).toBe('normal');
+    expect(rowTone(rowFor({}), NOW)).toBe('normal');
+  });
+
+  it('tags a task today at 5:31 AM late at 6:00 AM, and one at 11 PM not (QA M-01)', () => {
+    const sixAm = Date.parse(atLocal('2026-09-16', '06:00'));
+    const rowAt = (hm: string) =>
+      calendarRows({ tasks: [task({ id: 't', startAt: atLocal('2026-09-16', hm) })], events: [], day, timeZone: ZONE, now: sixAm })[0];
+    expect(rowTone(rowAt('05:31'), sixAm)).toBe('late');
+    expect(rowSymbol(rowAt('05:31'), sixAm)).toBe('doc.text');
+    expect(rowTone(rowAt('23:00'), sixAm)).toBe('normal');
   });
 
   it('gives an event the calendar glyph and an overdue task the document glyph', () => {
     const eventRow = calendarRows({ tasks: [], events: [event({ id: 'e' })], day, timeZone: ZONE, now: NOW })[0];
-    expect(rowSymbol(eventRow, ZONE, NOW)).toBe('calendar');
-    expect(rowSymbol(rowFor({ dueAt: atLocal('2026-09-01') }), ZONE, NOW)).toBe('doc.text');
-    expect(rowSymbol(rowFor({}), ZONE, NOW)).toBe('checkmark.square');
+    expect(rowSymbol(eventRow, NOW)).toBe('calendar');
+    expect(rowSymbol(rowFor({ startAt: atLocal('2026-09-16', '08:00') }), NOW)).toBe('doc.text');
+    expect(rowSymbol(rowFor({}), NOW)).toBe('checkmark.square');
   });
 });
