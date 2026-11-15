@@ -44,7 +44,7 @@ export default async function QrAnalyticsPage({ searchParams }: {
   const range = parseAdminDateRange(query.from, query.to);
   const today = new Date().toISOString().slice(0, 10);
   const data = await adminData(`/api/admin/qr-analytics?from=${range.from}&to=${range.to}`, qrAnalyticsSchema);
-  return <div className="admin-qr-report">
+  return <div className="admin-analytics-page">
     <PageHeading title="QR Code Analytics" description="Opens of the NexDo homepage QR link. Daily counts and date filters use UTC. Recent opens use Pacific time.">
       <AdminDateRangeFilter from={range.from} to={range.to} today={today} label={adminDateRangeLabel(range)} pathname="/qr-analytics"/>
     </PageHeading>

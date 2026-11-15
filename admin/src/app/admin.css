@@ -130,7 +130,7 @@
 .admin-qr-breakdown td { white-space: normal; overflow-wrap: anywhere; }
 .admin-span-12 { grid-column: 1 / -1; }
 
-.admin-qr-report { max-width:1280px; margin-inline:auto; }
+.admin-analytics-page { max-width:1280px; margin-inline:auto; }
 .admin-qr-chart { max-width:900px; margin-inline:auto; padding-inline:6px; }
 .admin-qr-chart .admin-chart-wrap { min-height:0; }
 .admin-qr-chart .admin-line-chart { height:auto; aspect-ratio:680 / 210; }
