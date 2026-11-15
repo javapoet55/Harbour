@@ -4,21 +4,25 @@ import Link from 'next/link';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, Bug, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users, MessageSquare } from 'lucide-react';
+import { BarChart3, Bug, Bot, ChevronDown, ClipboardList, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users, MessageSquare } from 'lucide-react';
 
-const links = [
-  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
-  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
+const primaryLinks = [
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/ask', label: 'Ask Nexdo', icon: Bot },
   { href: '/users', label: 'Users', icon: Users },
+];
+
+const reportLinks = [
   { href: '/usage', label: 'Usage Analytics', icon: BarChart3 },
   { href: '/qr-analytics', label: 'QR Code Analytics', icon: QrCode },
   { href: '/engagement', label: 'Firebase Engagement', icon: BarChart3 },
   { href: '/voice', label: 'Voice Analytics', icon: Mic2 },
+  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
+];
+
+const otherLinks = [
   { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/health', label: 'System Health', icon: HeartPulse },
-  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
   { href: '/feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
@@ -35,16 +39,28 @@ export function AdminShell({ children, name, email }: { children: React.ReactNod
       router.refresh();
     } catch { setSignOutError('Sign-out failed. Please try again.'); }
   }
+  const isActive = (href: string) => pathname === href || (href !== '/' && pathname.startsWith(href + '/'));
+  const inReports = reportLinks.some(({ href }) => isActive(href));
+  function navLink({ href, label, icon: Icon }: (typeof primaryLinks)[number]) {
+    const active = isActive(href);
+    return <Link key={href} href={href} aria-label={label} title={label} aria-current={active ? 'page' : undefined} className={active ? 'active' : ''}>
+      <Icon size={19} aria-hidden="true"/><span>{label}</span>
+    </Link>;
+  }
   return (
     <div className="admin-app">
       <aside className="admin-sidebar">
         <Link href="/" className="admin-brand"><NexdoLogo priority /></Link>
         <p className="admin-role">Super Admin</p>
         <nav className="admin-nav" aria-label="Admin navigation">
-          {links.map(({ href, label, icon: Icon }) => {
-            const active = href === '/' ? pathname === href : pathname.startsWith(href);
-            return <Link key={href} href={href} className={active ? 'active' : ''}><Icon size={19} /><span>{label}</span></Link>;
-          })}
+          {primaryLinks.map(navLink)}
+          <details className={`admin-reports-nav${inReports ? ' current' : ''}`} open={inReports}>
+            <summary aria-label="Reports" title="Reports">
+              <ClipboardList size={19} aria-hidden="true"/><span>Reports</span><ChevronDown size={15} className="admin-reports-chevron" aria-hidden="true"/>
+            </summary>
+            <div className="admin-reports-links">{reportLinks.map(navLink)}</div>
+          </details>
+          {otherLinks.map(navLink)}
         </nav>
         <div className="admin-account">
           <div className="admin-avatar">{name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
