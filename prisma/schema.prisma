@@ -858,6 +858,8 @@ model ShoppingEmailSchedule {
   recipientName String
   customerPhone String?
   timeZone String
+  sendDate String?
+  oneTimeQueued Boolean @default(false)
   weekday Int @default(6)
   hour Int @default(10)
   minute Int @default(0)
