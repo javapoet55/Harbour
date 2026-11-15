@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
-import { formatVoiceDate } from '@/lib/admin-voice';
+import { formatRecentDate, formatVoiceDate } from '@/lib/admin-voice';
 import { Activity, Bot, Eye, Mic2, UserPlus, Users } from 'lucide-react';
 import { Donut, formatNumber, LineChart, MetricCard, Panel, ProgressList } from '@/components/admin/admin-ui';
 import type { AdminSnapshot } from '@/contract/snapshot';
@@ -64,14 +64,6 @@ export function OverviewAnalytics({data,rangeLabel}:{data:Data;rangeLabel:string
  {table.rows.length>25&&<div className="admin-voice-pagination"><button disabled={!page} onClick={()=>setPage(p=>p-1)}>Previous</button><span>Page {page+1} of {Math.ceil(table.rows.length/25)} · {table.rows.length} rows</span><button disabled={(page+1)*25>=table.rows.length} onClick={()=>setPage(p=>p+1)}>Next</button></div>}
  </Panel>}</div>
  </>;
-}
-
-const recentDateFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Los_Angeles', timeZoneName: 'short',
-  month: 'short', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit',
-});
-function formatRecentDate(value: string) {
-  return recentDateFormatter.format(new Date(value));
 }
 
 function overviewDevices(data: Data) {
