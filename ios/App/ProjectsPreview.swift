@@ -33,6 +33,9 @@ final class ProjectsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; data.append(buffer, count: count) }
             }
             let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            if path == "/api/realtime/task-session", method == "POST" {
+                return (503, ["error": "Voice service unavailable in the simulator test."])
+            }
             if path == "/api/projects", method == "GET" { return (200, ["projects": projects.map(projection), "unassignedTaskCount": tasks.filter { $0["projectId"] == nil || $0["projectId"] is NSNull }.count]) }
             if path == "/api/projects", method == "POST" {
                 if ProcessInfo.processInfo.arguments.contains("-projects-fail-first-save"), !failed { failed = true; return (503, ["error": "Sample connection interrupted. Try again."]) }

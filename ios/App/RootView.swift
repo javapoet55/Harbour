@@ -335,7 +335,9 @@ private struct TaskDesignPreview: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                model.profile = Profile(id: "preview", name: "Sri", email: "sri@example.com", timeZone: "America/Los_Angeles")
+                model.profile = Profile(id: "preview", name: "Sri", email: "sri@example.com",
+                                        timeZone: ProcessInfo.processInfo.arguments.contains("-voice-startup-test")
+                                            ? TimeZone.autoupdatingCurrent.identifier : "America/Los_Angeles")
                 var calendar = Calendar(identifier: .gregorian)
                 calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
                 let today = calendar.startOfDay(for: Date())
