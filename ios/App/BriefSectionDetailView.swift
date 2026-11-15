@@ -1,13 +1,15 @@
+import AVFoundation
 import SwiftUI
 
 struct BriefSectionDetailView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     let title: String
     let items: [String]
-    var readError: String? = nil
     let ask: (String) -> Void
-    let read: () -> Void
+    let stopVoiceReply: () -> Void
+    @StateObject private var speech = BriefSectionSpeech()
     @State private var taskSection: TaskDetailsView.InitialSection?
     @State private var selectedTask: NexdoTask?
     @State private var contactAction: ContactRoute?
@@ -40,7 +42,12 @@ struct BriefSectionDetailView: View {
                         .font(.subheadline).foregroundStyle(secondary)
                 }.frame(maxWidth: .infinity)
                 Menu {
-                    Button("Read aloud", systemImage: "speaker.wave.2", action: read)
+                    if speech.isReading {
+                        Button("Stop reading", systemImage: "stop.circle") { speech.stop() }
+                    } else {
+                        Button("Read aloud", systemImage: "speaker.wave.2", action: readAloud)
+                            .disabled(items.isEmpty)
+                    }
                     ShareLink(item: items.joined(separator: "\n\n")) { Label("Share briefing", systemImage: "square.and.arrow.up") }
                 } label: {
                     Image(systemName: "ellipsis").font(.title2).frame(width: 44, height: 44).background(.indigo.opacity(0.07), in: Circle())
@@ -57,7 +64,7 @@ struct BriefSectionDetailView: View {
                         DetailArtwork(part: .target).frame(width: 70, height: 60).accessibilityHidden(true)
                     }.padding(14).background(.purple.opacity(0.045), in: RoundedRectangle(cornerRadius: 22))
                         .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1.5))
-                    if let readError { ReadAloudError(message: readError) }
+                    if let message = speech.error { ReadAloudError(message: message) }
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                         if let task = task(for: item) { taskCard(task, context: item, index: index) }
                         else { insightCard(item, index: index) }
@@ -77,10 +84,21 @@ struct BriefSectionDetailView: View {
             }
         }.foregroundStyle(ink).buttonStyle(.plain)
             .background(LinearGradient(colors: [.purple.opacity(0.07), .blue.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing).background(.white).ignoresSafeArea())
+            .onDisappear { speech.stop() }
+            .onChange(of: scenePhase) { _, phase in if phase == .background { speech.stop() } }
             .sheet(item: $selectedTask) { task in NavigationStack { TaskDetailsView(task: task, initialSection: taskSection) } }
             .sheet(item: $contactAction) { route in
                 TaskActionView(actionID: route.id, preferred: route.channel, startSelectedAction: true)
             }
+    }
+
+    private func readAloud() {
+        guard model.profile?.preference?.voiceEnabled != false else {
+            speech.showError("Enable spoken replies in Settings to use Read aloud.")
+            return
+        }
+        stopVoiceReply()
+        speech.read(items.joined(separator: "\n\n"))
     }
 
     private func requestHelp(_ query: String) { dismiss(); ask(query) }
@@ -172,5 +190,66 @@ private struct DetailArtwork: View {
     }()
     var body: some View {
         if let image = Self.sprites[part] { Image(uiImage: image).resizable().scaledToFit().blendMode(.multiply) }
+    }
+}
+
+/// Reads the displayed briefing on-device, independently of the generated voice reply.
+@MainActor
+private final class BriefSectionSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published private(set) var isReading = false
+    @Published private(set) var error: String?
+    private let synthesizer = AVSpeechSynthesizer()
+    private var currentUtterance: ObjectIdentifier?
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
+
+    func read(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        stop()
+        error = nil
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio)
+            try session.setActive(true)
+        } catch {
+            showError("Nexdo couldn’t start reading this briefing. Try again.")
+            return
+        }
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.volume = Float(AppVoice.volume)
+        currentUtterance = ObjectIdentifier(utterance)
+        isReading = true
+        synthesizer.speak(utterance)
+    }
+
+    func showError(_ message: String) {
+        error = message
+    }
+
+    func stop() {
+        guard currentUtterance != nil else { return }
+        currentUtterance = nil
+        isReading = false
+        synthesizer.stopSpeaking(at: .immediate)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        finish(ObjectIdentifier(utterance))
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        finish(ObjectIdentifier(utterance))
+    }
+
+    private nonisolated func finish(_ utterance: ObjectIdentifier) {
+        Task { @MainActor in
+            guard currentUtterance == utterance else { return }
+            stop()
+        }
     }
 }
