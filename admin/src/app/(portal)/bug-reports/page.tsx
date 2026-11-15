@@ -1,3 +1,4 @@
+import { ScreenshotPreview } from './screenshot-preview';
 import Link from 'next/link';
 import { z } from 'zod';
 import { adminData } from '@/server/admin-data';
@@ -10,38 +11,63 @@ const schema = z.object({ bugs: z.array(z.object({
   }).nullable(),
 })), nextCursor: z.string().nullable() });
 
-export default async function BugReportsPage({ searchParams }: { searchParams: Promise<{ cursor?: string }> }) {
-  const { cursor } = await searchParams;
+export default async function BugReportsPage({ searchParams }: { searchParams: Promise<{ cursor?: string; sort?: string; direction?: string }> }) {
+  const { cursor, sort, direction } = await searchParams;
   const validCursor = cursor && z.string().uuid().safeParse(cursor).success ? cursor : undefined;
-  const data = await adminData('/api/admin/feedback/bugs' + (validCursor ? `?cursor=${encodeURIComponent(validCursor)}` : ''), schema);
-  return <>
-    <PageHeading title="Bug Reports" description="Submitted bug tickets, newest first. Reports are retained for 90 days; screenshots for 7 days.">
-      <a href="/bug-reports">Refresh reports</a>
+  const sortByApp = sort === 'app';
+  const ascending = direction === 'asc';
+  const params = new URLSearchParams();
+  if (validCursor) params.set('cursor', validCursor);
+  if (sortByApp) params.set('sort', 'app');
+  if (ascending) params.set('direction', 'asc');
+  const data = await adminData('/api/admin/feedback/bugs' + (params.size ? `?${params}` : ''), schema);
+  const bugs = data.bugs;
+  const pageUrl = (next?: string | null) => {
+    const query = new URLSearchParams();
+    if (sortByApp) query.set('sort', 'app');
+    if (ascending) query.set('direction', 'asc');
+    if (next) query.set('cursor', next);
+    return '/bug-reports' + (query.size ? `?${query}` : '');
+  };
+  const arrow = ascending ? '↑' : '↓';
+  return <div className="admin-bug-report">
+    <PageHeading title="Bug Reports" description="Submitted bug tickets. Reports are retained for 90 days; screenshots for 7 days.">
+      <a className="admin-bug-action" href={pageUrl()}>Refresh reports</a>
     </PageHeading>
-    <p role="note">Reports stay in the environment where they were submitted. Xcode Debug builds send reports to{' '}
+    <p className="admin-callout" role="note"><span>Reports stay in the environment where they were submitted. Xcode Debug builds send reports to{' '}
       <a href="https://admin-dev.nexdoapp.com/bug-reports">Development Bug Reports</a>.
       {' '}Release builds send reports to <a href="https://admin.nexdoapp.com/bug-reports">Production Bug Reports</a>.
-    </p>
+    </span></p>
     <Panel title="Submitted bugs">
-      {data.bugs.length === 0 ? <p>No bug reports submitted yet.</p> : <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead><tr>{['Ticket', 'Description', 'App & device', 'Submitted (UTC)', 'Screenshot'].map(label => <th key={label} scope="col" style={{ padding: 12 }}>{label}</th>)}</tr></thead>
-          <tbody>{data.bugs.map(bug => <tr key={bug.id}>
-            <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{bug.reference}</td>
-            <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', minWidth: 240 }}>{bug.description}</td>
-            <td style={{ padding: 12, verticalAlign: 'top' }}>{bug.metadata ? <>
-              <div>{bug.metadata.screen}</div><div>v{bug.metadata.appVersion} ({bug.metadata.buildNumber})</div>
-              <div>{bug.metadata.deviceModel} · iOS {bug.metadata.iosVersion}</div>
-            </> : 'Details unavailable'}</td>
-            <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'nowrap' }}><time dateTime={bug.createdAt}>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(bug.createdAt))}</time></td>
-            <td style={{ padding: 12, verticalAlign: 'top' }}>{bug.hasScreenshot ? <a href={`/api/admin/feedback/bugs/${bug.id}/screenshot`} target="_blank" rel="noopener noreferrer">View screenshot</a> : 'Not attached or expired'}</td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
-      <nav aria-label="Bug report pages" style={{ display: 'flex', gap: 24, marginTop: 20 }}>
-        {validCursor && <Link href="/bug-reports">Latest reports</Link>}
-        {data.nextCursor && <Link href={`/bug-reports?cursor=${encodeURIComponent(data.nextCursor)}`}>Older reports →</Link>}
+      {bugs.length === 0 ? <p>No bug reports submitted yet.</p> : <>
+        <div className="admin-table-scroll">
+          <table className="admin-table admin-bug-table">
+            <thead><tr>
+              <th scope="col">Ticket</th><th scope="col">Description</th>
+              <th scope="col" aria-sort={sortByApp ? (ascending ? 'ascending' : 'descending') : undefined}>
+                <Link href={'?sort=app&direction=' + (sortByApp && ascending ? 'desc' : 'asc')}>App <span aria-hidden="true">{sortByApp ? arrow : '↕'}</span></Link>
+              </th>
+              <th scope="col">Device</th>
+              <th scope="col" aria-sort={!sortByApp ? (ascending ? 'ascending' : 'descending') : undefined}>
+                <Link href={(!sortByApp && !ascending) ? '?direction=asc' : '/bug-reports'}>Submitted (UTC) <span aria-hidden="true">{sortByApp ? '↕' : arrow}</span></Link>
+              </th>
+              <th scope="col">Screenshot</th>
+            </tr></thead>
+            <tbody>{bugs.map(bug => <tr key={bug.id}>
+              <th scope="row">{bug.reference}</th>
+              <td className="admin-bug-description">{bug.description}</td>
+              <td>{bug.metadata ? <><strong className="admin-bug-app">{bug.metadata.screen}</strong><small>v{bug.metadata.appVersion} ({bug.metadata.buildNumber})</small></> : 'Unavailable'}</td>
+              <td>{bug.metadata ? <>{bug.metadata.deviceModel}<small>iOS {bug.metadata.iosVersion}</small></> : 'Unavailable'}</td>
+              <td><time dateTime={bug.createdAt}>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(bug.createdAt))}</time></td>
+              <td>{bug.hasScreenshot ? <ScreenshotPreview id={bug.id} reference={bug.reference}/> : 'Not attached or expired'}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </>}
+      <nav aria-label="Bug report pages" className="admin-bug-pages">
+        {validCursor && <Link href={pageUrl()}>{!sortByApp && !ascending ? 'Latest reports' : 'First page'}</Link>}
+        {data.nextCursor && <Link href={pageUrl(data.nextCursor)}>{sortByApp ? 'Next page →' : ascending ? 'Newer reports →' : 'Older reports →'}</Link>}
       </nav>
     </Panel>
-  </>;
+  </div>;
 }
