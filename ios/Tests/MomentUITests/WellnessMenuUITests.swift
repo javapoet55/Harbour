@@ -68,6 +68,7 @@ import XCTest
     private func continueFromGuide(_ app:XCUIApplication) {
         XCTAssertTrue(app.navigationBars["How It Works"].waitForExistence(timeout:5))
         let button=app.buttons["module-guide-continue"]
+        XCTAssertEqual(button.label, "Continue")
         for _ in 0..<6 { if button.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(button.isHittable)
         button.tap()
@@ -94,6 +95,9 @@ import XCTest
     }
 
     private func closeModule(_ module: String, in app: XCUIApplication) {
+        if module == "pomodoro" && app.buttons["Pomodoro dashboard"].exists {
+            app.buttons["Pomodoro dashboard"].tap()
+        }
         let label = module == "calories" ? "Close calorie tracker" : module == "pomodoro" ? "Close dashboard" : "Back"
         app.buttons[label].firstMatch.tap()
         XCTAssertTrue(app.buttons["wellness.\(module)"].waitForExistence(timeout: 5))

@@ -88,7 +88,7 @@ struct WellnessModuleGuide: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 4) {
                     Button(action:onContinue) {
-                        Text("Got it!").font(.headline).foregroundStyle(.white)
+                        Text("Continue").font(.headline).foregroundStyle(.white)
                             .frame(maxWidth:.infinity,minHeight:54)
                             .background(LinearGradient(colors:[kind.color.opacity(0.75),kind.color],startPoint:.topLeading,endPoint:.bottomTrailing),in:Capsule())
                     }.buttonStyle(.plain).accessibilityIdentifier("module-guide-continue")
