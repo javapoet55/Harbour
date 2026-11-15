@@ -221,3 +221,27 @@ it('keeps legacy schedules saved before the phone field existed sending without 
  const run=await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}});
  expect(run.status).toBe('sent');expect(run.body).toContain('Thank you!\nShopper\nSent with NexDo');
 });
+
+it('sends a one-time schedule once, uses its exact pickup date, and disables it after delivery', async () => {
+ const {list}=await setup();
+ const sentAt=new Date('2030-01-06T18:00:00Z');
+ const schedule=await saveEmailSchedule(userId,list.id,{...settings,sendDate:'2030-01-06',pickupDate:'2030-01-06',pickupStartHour:11}, now);
+ expect(schedule.nextRunAt).toEqual(sentAt);
+ const mailer={send:vi.fn(async (_user:string,_to:string,_subject:string,_body:string,_runId:string)=>({kind:'sent' as const,id:'once'}))};
+ await runShoppingEmails(sentAt,mailer);
+ await runShoppingEmails(new Date(+sentAt+7*86400000),mailer);
+ const runs=await prisma.shoppingEmailRun.findMany({where:{scheduleId:schedule.id}});
+ expect(runs).toHaveLength(1);
+ expect(mailer.send.mock.calls.filter(call=>call[4]===runs[0].id)).toHaveLength(1);
+ expect(runs[0]).toMatchObject({status:'sent',providerId:'once'});
+ expect(runs[0].body).toContain('Sun, Jan 6, 2030');
+ expect(await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).toMatchObject({enabled:false,oneTimeQueued:true});
+});
+
+it('rejects a past one-time send, a nonexistent local time, and a pickup before sending', async () => {
+ const {list}=await setup();
+ const base={...settings,sendDate:'2030-01-05'};
+ await expect(saveEmailSchedule(userId,list.id,base,now)).rejects.toThrow('future send date');
+ await expect(saveEmailSchedule(userId,list.id,{...base,sendDate:'2030-01-06',pickupDate:'2030-01-05',pickupStartHour:11},now)).rejects.toThrow('pickup window');
+ await expect(saveEmailSchedule(userId,list.id,{...base,sendDate:'2030-03-10',hour:2,minute:30},now)).rejects.toThrow('future send date');
+});

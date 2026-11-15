@@ -72,7 +72,7 @@ it('explains a missing list ID',async()=>{
 
 it('saves a connected Gmail only when the same signed-in user confirms the ticket',async()=>{
  vi.stubEnv('MOMENTS_GOOGLE_CLIENT_ID','id');vi.stubEnv('MOMENTS_GOOGLE_CLIENT_SECRET','secret');vi.stubEnv('MOMENTS_GOOGLE_REDIRECT_URI','https://nexdo.test/api/moments/email/callback');
- vi.stubGlobal('fetch',vi.fn(async(url:string|URL)=>String(url).includes('/token')?Response.json({access_token:'access',refresh_token:'victim-refresh'}):Response.json({email:'victim@example.com',email_verified:true})));
+ vi.stubGlobal('fetch',vi.fn(async(url:string|URL)=>String(url).includes('/token')?Response.json({access_token:'access',refresh_token:'victim-refresh',scope:'https://www.googleapis.com/auth/gmail.send'}):Response.json({email:'victim@example.com',email_verified:true})));
  await prisma.momentEmailAccount.deleteMany({where:{userId}});
  const attacker=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Attacker',passwordHash:''}})).id;
  const complete=async(owner:string)=>new URL((await callback(new Request(`https://nexdo.test/api/moments/email/callback?code=c&state=${new URL(await connectURL(owner)).searchParams.get('state')}`))).headers.get('Location')!);
