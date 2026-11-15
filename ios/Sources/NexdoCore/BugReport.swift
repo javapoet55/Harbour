@@ -21,6 +21,30 @@ public struct BugReportInput: Encodable, Sendable {
     public let screenshot: String?
 }
 public struct BugReportReceipt: Decodable, Sendable { public let reference: String }
+public enum BugReportStatus: String, CaseIterable, Decodable, Sendable {
+    case open, closed
+
+    public var title: String {
+        switch self {
+        case .open: "Open"
+        case .closed: "Closed"
+        }
+    }
+}
+
+public struct SubmittedBugReport: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let reference: String
+    public let description: String
+    public let createdAt: String
+    public let status: BugReportStatus
+}
+
+public struct BugReportHistoryPage: Decodable, Sendable {
+    public let reports: [SubmittedBugReport]
+    public let nextCursor: String?
+}
+
 public struct BugReportDraft: Sendable {
     public var description = ""
     public private(set) var screenshot: Data?

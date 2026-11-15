@@ -932,6 +932,7 @@ model BugReport {
   screenshot String?
   screenshotExpiresAt DateTime
   expiresAt DateTime
+  closedAt DateTime?
   emailSentAt DateTime?
   leaseUntil DateTime?
   nextAttemptAt DateTime @default(now())

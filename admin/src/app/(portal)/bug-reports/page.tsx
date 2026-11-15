@@ -1,18 +1,21 @@
 import { ScreenshotPreview } from './screenshot-preview';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { backendFetch } from '@/server/backend';
+import { sessionToken } from '@/server/session';
 import { z } from 'zod';
 import { adminData } from '@/server/admin-data';
 import { PageHeading, Panel } from '@/components/admin/admin-ui';
 
 const schema = z.object({ bugs: z.array(z.object({
   id: z.string().uuid(), reference: z.string(), description: z.string(), createdAt: z.string().datetime(),
-  hasScreenshot: z.boolean(), metadata: z.object({
+  status: z.enum(['open', 'closed']).default('open'), hasScreenshot: z.boolean(), metadata: z.object({
     appVersion: z.string(), buildNumber: z.string(), deviceModel: z.string(), iosVersion: z.string(), screen: z.string(),
   }).nullable(),
 })), nextCursor: z.string().nullable() });
 
-export default async function BugReportsPage({ searchParams }: { searchParams: Promise<{ cursor?: string; sort?: string; direction?: string }> }) {
-  const { cursor, sort, direction } = await searchParams;
+export default async function BugReportsPage({ searchParams }: { searchParams: Promise<{ cursor?: string; sort?: string; direction?: string; statusError?: string }> }) {
+  const { cursor, sort, direction, statusError } = await searchParams;
   const validCursor = cursor && z.string().uuid().safeParse(cursor).success ? cursor : undefined;
   const sortByApp = sort === 'app';
   const ascending = direction === 'asc';
@@ -29,6 +32,26 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
     if (next) query.set('cursor', next);
     return '/bug-reports' + (query.size ? `?${query}` : '');
   };
+  const currentPage = pageUrl(validCursor);
+  async function changeStatus(form: FormData) {
+    'use server';
+    const token = await sessionToken();
+    if (!token) redirect('/login');
+    const id = z.string().uuid().safeParse(form.get('id'));
+    const status = form.get('status');
+    let updated = false;
+    if (id.success && (status === 'open' || status === 'closed')) {
+      try {
+        const response = await backendFetch('/api/admin/feedback/bugs', {
+          method: 'PATCH', token, body: { id: id.data, closed: status === 'closed' },
+        });
+        updated = response.ok;
+      } catch {
+        // A network failure can be retried from the same report page.
+      }
+    }
+    redirect(updated ? currentPage : currentPage + (currentPage.includes('?') ? '&' : '?') + 'statusError=1');
+  }
   const arrow = ascending ? '↑' : '↓';
   return <div className="admin-bug-report">
     <PageHeading title="Bug Reports" description="Submitted bug tickets. Reports are retained for 90 days; screenshots for 7 days.">
@@ -38,6 +61,7 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
       <a href="https://admin-dev.nexdoapp.com/bug-reports">Development Bug Reports</a>.
       {' '}Release builds send reports to <a href="https://admin.nexdoapp.com/bug-reports">Production Bug Reports</a>.
     </span></p>
+    {statusError === '1' && <p role="alert">Couldn’t update the bug status. Refresh the reports before trying again.</p>}
     <Panel title="Submitted bugs">
       {bugs.length === 0 ? <p>No bug reports submitted yet.</p> : <>
         <div className="admin-table-scroll">
@@ -51,7 +75,7 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
               <th scope="col" aria-sort={!sortByApp ? (ascending ? 'ascending' : 'descending') : undefined}>
                 <Link href={(!sortByApp && !ascending) ? '?direction=asc' : '/bug-reports'}>Submitted (UTC) <span aria-hidden="true">{sortByApp ? '↕' : arrow}</span></Link>
               </th>
-              <th scope="col">Screenshot</th>
+              <th scope="col">Status</th><th scope="col">Screenshot</th>
             </tr></thead>
             <tbody>{bugs.map(bug => <tr key={bug.id}>
               <th scope="row">{bug.reference}</th>
@@ -59,6 +83,14 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
               <td>{bug.metadata ? <><strong className="admin-bug-app">{bug.metadata.screen}</strong><small>v{bug.metadata.appVersion} ({bug.metadata.buildNumber})</small></> : 'Unavailable'}</td>
               <td>{bug.metadata ? <>{bug.metadata.deviceModel}<small>iOS {bug.metadata.iosVersion}</small></> : 'Unavailable'}</td>
               <td><time dateTime={bug.createdAt}>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(bug.createdAt))}</time></td>
+              <td>
+                {bug.status === 'closed' ? 'Closed' : 'Open'}
+                <form action={changeStatus}>
+                  <input type="hidden" name="id" value={bug.id}/>
+                  <input type="hidden" name="status" value={bug.status === 'closed' ? 'open' : 'closed'}/>
+                  <button className="admin-bug-action" type="submit">{bug.status === 'closed' ? 'Reopen report' : 'Close report'}</button>
+                </form>
+              </td>
               <td>{bug.hasScreenshot ? <ScreenshotPreview id={bug.id} reference={bug.reference}/> : 'Not attached or expired'}</td>
             </tr>)}</tbody>
           </table>

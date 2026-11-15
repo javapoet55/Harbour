@@ -1,0 +1,1 @@
+ALTER TABLE "BugReport" ADD COLUMN "closedAt" DATETIME;

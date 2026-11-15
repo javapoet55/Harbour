@@ -891,6 +891,15 @@ final class AppModel: ObservableObject {
         focusSession = nil
         taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
     }
+    func bugReportHistory(status: BugReportStatus, cursor: String?) async throws -> BugReportHistoryPage {
+        var query = URLComponents()
+        query.path = "/api/feedback/bugs"
+        query.queryItems = [URLQueryItem(name: "status", value: status.rawValue)]
+        if let cursor { query.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        guard let path = query.string else { throw APIError.invalidResponse }
+        return try await api.request(path)
+    }
+
     func submitBugReport(_ input: BugReportInput) async throws -> BugReportReceipt {
         try await api.request("/api/feedback/bugs", method: "POST", body: JSONEncoder().encode(input))
     }

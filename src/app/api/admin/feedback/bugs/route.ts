@@ -45,7 +45,7 @@ async function list(req: Request) {
       orderBy: [{ createdAt: direction }, { id: direction }], take: 51,
       ...(cursor && !appPage ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: { id: true, description: true, createdAt: true, bugReport: { select: {
-        reference: true, metadata: true, screenshotExpiresAt: true,
+        reference: true, metadata: true, screenshotExpiresAt: true, closedAt: true,
       } } },
     });
     const rank = new Map(appPage?.map((id, index) => [id, index]));
@@ -59,9 +59,35 @@ async function list(req: Request) {
     const bugs = page.map(row => {
       const metadata = parseMetadata(row.bugReport!.metadata);
       return { id: row.id, reference: row.bugReport!.reference, description: row.description,
-        createdAt: row.createdAt, metadata, hasScreenshot: screenshotIDs.has(row.id) };
+        createdAt: row.createdAt, status: row.bugReport!.closedAt ? 'closed' : 'open', metadata, hasScreenshot: screenshotIDs.has(row.id) };
     });
     return adminJson({ bugs, nextCursor: rows.length > 50 ? page[49].id : null });
   } catch (error) { return adminApiFailure(error); }
 }
 export const GET = healthRoute('GET /api/admin/feedback/bugs', list);
+
+const statusInput = z.object({ id: z.string().uuid(), closed: z.boolean() }).strict();
+
+async function updateStatus(req: Request) {
+  try {
+    await requireAdmin();
+    const parsed = statusInput.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) return adminJson({ error: 'Invalid bug report status.' }, 400);
+
+    const { id, closed } = parsed.data;
+    const now = new Date();
+    const where = { id, expiresAt: { gt: now } };
+    const updated = await prisma.bugReport.updateMany({
+      where: { ...where, closedAt: closed ? null : { not: null } },
+      data: { closedAt: closed ? now : null },
+    });
+    if (updated.count === 0 && !await prisma.bugReport.findFirst({ where, select: { id: true } })) {
+      return adminJson({ error: 'Bug report not found.' }, 404);
+    }
+    return adminJson({ status: closed ? 'closed' : 'open' });
+  } catch (error) {
+    return adminApiFailure(error);
+  }
+}
+
+export const PATCH = healthRoute('PATCH /api/admin/feedback/bugs', updateStatus);
