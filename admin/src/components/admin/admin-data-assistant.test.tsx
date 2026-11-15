@@ -12,6 +12,11 @@ it('fills each of the analytics prompts without sending and submits the selected
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { callback(); return 1; });
   render(<AdminDataAssistant days={7} from="2026-10-01" to="2026-10-07"/>);
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+  fireEvent.click(screen.getByRole('button', { name: 'Bugs & Issues' }));
+  expect(screen.getByLabelText('Suggested questions').querySelectorAll('button')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Suggested Questions' }));
+  expect(screen.getByLabelText('Suggested questions').querySelectorAll('button')).toHaveLength(9);
+  fireEvent.click(screen.getByRole('button', { name: 'Show more questions' }));
   const prompts = screen.getByLabelText('Suggested questions').querySelectorAll('button');
   expect(prompts).toHaveLength(21);
   for (const prompt of prompts) {
