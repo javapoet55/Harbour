@@ -248,7 +248,7 @@ private struct BugReportHistory: View {
             ForEach(reports) { report in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(report.description).font(.body).fixedSize(horizontal: false, vertical: true)
-                    Label(report.status.title, systemImage: report.status == .open ? "circle" : "checkmark.circle")
+                    Label(report.detailedStatus?.title ?? report.status.title, systemImage: report.status == .open ? "circle" : "checkmark.circle")
                         .font(.subheadline.weight(.semibold))
                     if let date = MomentDates.parseInstant(report.createdAt) ?? ISO8601DateFormatter().date(from: report.createdAt) {
                         Text("Submitted \(date.formatted(date: .abbreviated, time: .omitted))")

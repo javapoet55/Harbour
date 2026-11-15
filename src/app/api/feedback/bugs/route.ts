@@ -3,6 +3,7 @@ import { prisma } from '@/server/db';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { consumeLimit } from '@/server/signup/abuse';
+import { closedBugReportStatuses } from '@/server/feedback/bug-status';
 import { bugSchema, saveBug } from '@/server/feedback/bugs';
 export const runtime = 'nodejs';
 const pageSize = 50;
@@ -23,17 +24,17 @@ export async function GET(req: Request) {
     const rows = await prisma.feedback.findMany({
       where: {
         userId: user.id,
-        bugReport: { expiresAt: { gt: new Date() }, closedAt: status === 'closed' ? { not: null } : null },
+        bugReport: { expiresAt: { gt: new Date() }, status: status === 'closed' ? { in: [...closedBugReportStatuses] } : { notIn: [...closedBugReportStatuses] } },
         ...(createdAt && id ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: id } }] } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: pageSize + 1,
-      select: { id: true, description: true, createdAt: true, bugReport: { select: { reference: true } } },
+      select: { id: true, description: true, createdAt: true, bugReport: { select: { reference: true, status: true } } },
     });
     const page = rows.slice(0, pageSize);
     const last = page.at(-1);
     const reports = page.map(row => ({
-      id: row.id, description: row.description, createdAt: row.createdAt, reference: row.bugReport!.reference, status,
+      id: row.id, description: row.description, createdAt: row.createdAt, reference: row.bugReport!.reference, status, detailedStatus: row.bugReport!.status,
     }));
     const nextCursor = rows.length > pageSize && last ? `${last.createdAt.toISOString()},${last.id}` : null;
     return Response.json({ reports, nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } });

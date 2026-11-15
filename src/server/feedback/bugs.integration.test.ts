@@ -145,7 +145,7 @@ it('lists newly created tickets for admins without exposing screenshots and excl
   expect((await (await list(request())).json()).bugs.some((bug: { id: string }) => bug.id === body.id)).toBe(false);
 });
 
-it('shows only the signed-in user’s reports and tracks admin close and reopen actions', async () => {
+it('shows only the signed-in user’s reports and tracks all five admin statuses', async () => {
   const owner = await user();
   const other = await user();
   const body = input();
@@ -156,12 +156,12 @@ it('shows only the signed-in user’s reports and tracks admin close and reopen 
     title: 'Feedback', description: 'General feedback', stars: 4,
   } });
   const list = (status: string) => history(new Request(`http://localhost/api/feedback/bugs?status=${status}`));
-  const update = (closed: boolean) => updateStatus(new Request('http://localhost/api/admin/feedback/bugs', {
-    method: 'PATCH', body: JSON.stringify({ id: body.id, closed }),
+  const update = (status: string) => updateStatus(new Request('http://localhost/api/admin/feedback/bugs', {
+    method: 'PATCH', body: JSON.stringify({ id: body.id, status }),
   }));
   const expected = {
     id: body.id, reference: referenceFor(body.id), description: body.description,
-    createdAt: expect.any(String), status: 'open',
+    createdAt: expect.any(String), status: 'open', detailedStatus: 'open',
   };
 
   vi.mocked(requireUser).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
@@ -171,16 +171,22 @@ it('shows only the signed-in user’s reports and tracks admin close and reopen 
   expect(await (await list('closed')).json()).toEqual({ reports: [], nextCursor: null });
 
   vi.mocked(requireAdmin).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
-  expect((await update(true)).status).toBe(401);
-  expect((await update(true)).status).toBe(200);
-  expect(await (await list('open')).json()).toEqual({ reports: [], nextCursor: null });
-  expect(await (await list('closed')).json()).toEqual({
-    reports: [{ ...expected, status: 'closed' }], nextCursor: null,
-  });
+  expect((await update('closed')).status).toBe(401);
+  expect((await update('invalid')).status).toBe(400);
+  for (const [detailedStatus, status] of [
+    ['in_progress', 'open'], ['future', 'open'], ['not_applicable', 'closed'], ['closed', 'closed'], ['open', 'open'],
+  ]) {
+    const response = await update(detailedStatus);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: detailedStatus });
+    expect((await prisma.bugReport.findUniqueOrThrow({ where: { id: body.id } })).status).toBe(detailedStatus);
+    expect(await (await list(status)).json()).toEqual({
+      reports: [{ ...expected, status, detailedStatus }], nextCursor: null,
+    });
+    expect(await (await list(status === 'open' ? 'closed' : 'open')).json()).toEqual({ reports: [], nextCursor: null });
+  }
 
-  expect((await update(false)).status).toBe(200);
-  expect(await (await list('open')).json()).toEqual({ reports: [expected], nextCursor: null });
   await prisma.bugReport.update({ where: { id: body.id }, data: { expiresAt: new Date(0) } });
   expect(await (await list('open')).json()).toEqual({ reports: [], nextCursor: null });
-  expect((await update(true)).status).toBe(404);
+  expect((await update('closed')).status).toBe(404);
 });

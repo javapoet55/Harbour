@@ -932,6 +932,7 @@ model BugReport {
   screenshot String?
   screenshotExpiresAt DateTime
   expiresAt DateTime
+  status String @default("open")
   closedAt DateTime?
   emailSentAt DateTime?
   leaseUntil DateTime?

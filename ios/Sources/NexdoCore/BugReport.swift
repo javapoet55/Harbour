@@ -32,12 +32,31 @@ public enum BugReportStatus: String, CaseIterable, Decodable, Sendable {
     }
 }
 
+public enum BugReportDetailedStatus: String, Decodable, Sendable {
+    case open
+    case inProgress = "in_progress"
+    case future
+    case notApplicable = "not_applicable"
+    case closed
+
+    public var title: String {
+        switch self {
+        case .open: "Open"
+        case .inProgress: "In Progress"
+        case .future: "Future"
+        case .notApplicable: "Not Applicable"
+        case .closed: "Closed"
+        }
+    }
+}
+
 public struct SubmittedBugReport: Decodable, Identifiable, Sendable {
     public let id: String
     public let reference: String
     public let description: String
     public let createdAt: String
     public let status: BugReportStatus
+    public let detailedStatus: BugReportDetailedStatus?
 }
 
 public struct BugReportHistoryPage: Decodable, Sendable {

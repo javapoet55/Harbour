@@ -252,3 +252,7 @@
 .admin-overview-recent thead th { text-align:left; color:#52627f; font-size:11px; padding:5px 6px; }
 .admin-overview-recent td { overflow-wrap:anywhere; vertical-align:top; }
 .admin-overview-recent time { white-space:nowrap; }
+
+.admin-bug-status { min-width:128px; padding:6px; background:#fff; border:1px solid #bcd7ff; border-radius:6px; color:#263c78; font:inherit; }
+.admin-bug-status:disabled { cursor:wait; }
+.admin-bug-table .admin-bug-status-error { color:#a02030; }
