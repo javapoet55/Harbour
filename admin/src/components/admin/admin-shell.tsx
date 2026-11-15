@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, Bug, Bot, ChevronDown, ClipboardList, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users, MessageSquare } from 'lucide-react';
+import { BarChart3, Bug, Bot, ChevronDown, ClipboardList, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users } from 'lucide-react';
 
 const primaryLinks = [
   { href: '/', label: 'Overview', icon: Gauge },
@@ -23,7 +23,6 @@ const reportLinks = [
 const otherLinks = [
   { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/health', label: 'System Health', icon: HeartPulse },
-  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 export function AdminShell({ children, name, email }: { children: React.ReactNode; name: string; email: string }) {
