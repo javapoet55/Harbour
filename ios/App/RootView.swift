@@ -1843,7 +1843,7 @@ struct TasksView: View {
                     header
                     HStack(spacing: 0) {
                         taskTab("Tasks", projects: false)
-                        taskTab("Projects", projects: true)
+                        taskTab("Folders", projects: true)
                     }
                     .padding(4)
                     .background(Color.nexdoIndigo.opacity(0.06), in: Capsule())
@@ -2294,7 +2294,7 @@ struct TaskEditor: View {
                     .transaction { if reduceMotion { $0.animation = nil } }
 
                     Divider().opacity(0.45)
-                    TaskEditorLabel(title: "PROJECT", icon: "folder")
+                    TaskEditorLabel(title: "FOLDER", icon: "folder")
                     ProjectAssignmentField(projectID: $projectID, disclosureIcon: "chevron.right")
 
                     Divider().opacity(0.45)

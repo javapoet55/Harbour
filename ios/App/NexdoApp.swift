@@ -946,7 +946,7 @@ extension AppModel {
         } catch {
             guard !Task.isCancelled, profile?.id == userID, projectLoadID == id, projectRevision == revision else { return }
             if case APIError.signedOut = error { await reset(); self.error = "Your session expired. Please sign in again." }
-            else { projectsError = "Couldn’t refresh projects. Check your connection and try again." }
+            else { projectsError = "Couldn’t refresh folders. Check your connection and try again." }
         }
     }
     func saveProject(id: String?, name: String, color: String) async throws {
