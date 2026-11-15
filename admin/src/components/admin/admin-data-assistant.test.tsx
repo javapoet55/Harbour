@@ -7,7 +7,12 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it('fills each of the analytics prompts without sending and submits the selected question and date range on Enter', async () => {
-  const fetch = vi.fn().mockResolvedValue(Response.json({ answer: 'The requested metric is unavailable.', chart: null }));
+  const chart = { type: 'line', title: 'Daily signups', xLabel: 'Date', yLabel: 'Signups', series: [{
+    name: 'Signups', color: '#7251e9', data: Array.from({ length: 30 }, (_, index) => ({
+      label: `Nov ${index + 1}`, value: index % 3,
+    })),
+  }] };
+  const fetch = vi.fn().mockResolvedValue(Response.json({ answer: 'Here is the signup trend.', chart }));
   vi.stubGlobal('fetch', fetch);
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { callback(); return 1; });
   render(<AdminDataAssistant days={7} from="2026-10-01" to="2026-10-07"/>);
@@ -29,7 +34,12 @@ it('fills each of the analytics prompts without sending and submits the selected
   fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
   expect(fetch).not.toHaveBeenCalled();
   fireEvent.keyDown(input, { key: 'Enter' });
-  await waitFor(() => expect(screen.getByText('The requested metric is unavailable.')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Here is the signup trend.')).toBeTruthy());
+  const plot = screen.getByRole('img', { name: 'Daily signups' });
+  expect(plot.querySelectorAll('circle')).toHaveLength(30);
+  expect(plot.querySelectorAll('.admin-insight-axis-label')).toHaveLength(12);
+  expect(plot.querySelector('.admin-insight-axis-label')?.lastChild?.textContent).toBe('11/01');
+  expect([...plot.querySelectorAll('.admin-insight-axis-label')].at(-1)?.lastChild?.textContent).toBe('11/30');
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
     question: 'What is estimated monthly revenue by plan? Use plan-based estimates, not verified payments.', days: 7, from: '2026-10-01', to: '2026-10-07',

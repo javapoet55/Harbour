@@ -173,9 +173,29 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
   </>;
 }
 
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function dateTick(label: string) {
+  const iso = label.match(/^\d{4}-(\d{2})-(\d{2})$/);
+  const compact = label.match(/^(?:19|20)\d{2}(\d{2})(\d{2})$/);
+  const numeric = label.match(/^(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?$/);
+  const named = label.match(/^([A-Za-z]+)\s+(\d{1,2})(?:,?\s+\d{4})?$/);
+  const numericParts = iso ?? compact ?? numeric;
+  const month = numericParts ? Number(numericParts[1])
+    : named ? monthNames.findIndex(name => name.toLowerCase() === named[1].slice(0, 3).toLowerCase()) + 1 : 0;
+  const day = Number(numericParts?.[2] ?? named?.[2]);
+  if (month < 1 || month > 12 || !(day >= 1 && day <= 31)) return null;
+  return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+}
+
 function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
   const labels = [...new Set(chart.series.flatMap((series) => series.data.map((point) => point.label)))];
-  const labelLimit = labels.length <= 6 ? 20 : labels.length <= 10 ? 12 : 8;
+  const dates = labels.map(dateTick);
+  const dateAxis = dates.every(Boolean);
+  const tickCount = Math.min(labels.length, dateAxis ? 12 : 9);
+  const ticks = Array.from({ length: tickCount }, (_, index) =>
+    tickCount === 1 ? 0 : Math.round(index * (labels.length - 1) / (tickCount - 1)));
+  const labelLimit = Math.min(20, Math.floor(100 / Math.max(tickCount, 1)));
   const values = chart.series.flatMap((series) => series.data.map((point) => point.value));
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
@@ -205,10 +225,14 @@ function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
         const groupStart = left + labelIndex * barGroup + (barGroup - barWidth * chart.series.length) / 2;
         return <rect key={`${series.name}-${label}`} x={groupStart + seriesIndex * barWidth} y={y(value)} width={barWidth} height={barHeight} rx="3" fill={series.color}><title>{`${series.name} · ${label}: ${value}`}</title></rect>;
       }))}
-      {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">
-        <title>{label}</title>
-        {label.length > labelLimit ? `${label.slice(0, labelLimit - 1)}…` : label}
-      </text>)}
+      {ticks.map((index) => {
+        const label = labels[index];
+        const display = dateAxis ? dates[index] : label;
+        return <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">
+          <title>{label}</title>
+          {display && display.length > labelLimit ? `${display.slice(0, labelLimit - 1)}…` : display}
+        </text>;
+      })}
       <text x={left + plotWidth / 2} y={246} textAnchor="middle" className="admin-insight-axis-title">{chart.xLabel}</text>
     </svg>
     </div>
