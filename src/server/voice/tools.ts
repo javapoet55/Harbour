@@ -39,7 +39,7 @@ export function validateVoiceTool(name: string, args: unknown) {
   if (!schema) throw new Error('Unsupported tool');
   return schema.parse(args);
 }
-export async function executeVoiceTool(userId: string, sessionId: string, callId: string, name: string, input: unknown) {
+export async function executeVoiceTool(userId: string, sessionId: string, callId: string, name: string, input: unknown, projectId?: string) {
   validateVoiceTool(name, input);
   if (isModuleTool(name)) return executeModuleTool(userId, `${sessionId}:${callId}`, name, input);
   if (name === 'get_current_time') {
@@ -112,12 +112,19 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     const intent = name === 'create_reminder' ? parseLifeReminder(String(args.originalUserText ?? args.title), user.timeZone) : null;
     const lifeType = name === 'create_reminder' ? String(args.lifeReminderType ?? (intent?.recognized ? intent.reminderType : 'general')) : null;
     lifeReminder = Boolean(intent?.recognized);
-    task = await createTask({ userId, title: intent?.recognized ? intent.title : String(args.title), notes: args.notes as string | undefined, startAt: scheduledAt,
-      dueAt: name === 'create_reminder' ? new Date(String(args.dueAt ?? intent?.dueDate?.toISOString() ?? args.scheduledAt)) : scheduledAt,
-      reminderAt: name === 'create_reminder' ? scheduledAt : null, lifeReminderType: lifeType,
-      lifeReminderConfidence: name === 'create_reminder' ? intent?.confidence || 0.9 : null,
-      originalUserText: name === 'create_reminder' ? String(args.originalUserText ?? args.title) : null,
-      durationMin: name === 'create_reminder' ? 5 : Number(args.durationMin), kind: name === 'create_reminder' ? 'REMINDER' : undefined, idempotencyKey: key });
+    try {
+      task = await createTask({ userId, projectId, title: intent?.recognized ? intent.title : String(args.title), notes: args.notes as string | undefined, startAt: scheduledAt,
+        dueAt: name === 'create_reminder' ? new Date(String(args.dueAt ?? intent?.dueDate?.toISOString() ?? args.scheduledAt)) : scheduledAt,
+        reminderAt: name === 'create_reminder' ? scheduledAt : null, lifeReminderType: lifeType,
+        lifeReminderConfidence: name === 'create_reminder' ? intent?.confidence || 0.9 : null,
+        originalUserText: name === 'create_reminder' ? String(args.originalUserText ?? args.title) : null,
+        durationMin: name === 'create_reminder' ? 5 : Number(args.durationMin), kind: name === 'create_reminder' ? 'REMINDER' : undefined, idempotencyKey: key });
+    } catch (error) {
+      if (projectId && error instanceof Error && error.message === 'NOT_FOUND') {
+        return { success: false, error: 'The selected folder is unavailable. No task was saved. Ask the user to reopen voice from an available folder.' };
+      }
+      throw error;
+    }
     const rule = args.recurrence as { frequency: string; interval: number } | undefined;
     if (name === 'create_reminder' && rule) await prisma.recurrenceRule.upsert({ where: { taskId: task.id }, update: rule, create: { taskId: task.id, ...rule } });
     if (name === 'create_reminder') { inc('life_reminder_created'); if (rule) inc('life_reminder_recurring_created'); }
@@ -177,5 +184,5 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   // connected calendar although the same words typed into New Task reached it.
   if (!lifeReminder) try { await pushTaskToExternal(userId, task.id); } catch { warnings.push('Task saved, but connected calendar sync failed.'); }
   try { await generateReplanProposal(userId); } catch { warnings.push('Task saved, but schedule suggestions could not refresh.'); }
-  return { success: true, warnings, task: { id: task.id, title: task.title, status: task.status, priority: task.priority, durationMin: task.durationMin, startAt: task.startAt, dueAt: task.dueAt }, reminderWarning };
+  return { success: true, warnings, task: { id: task.id, projectId: task.projectId, title: task.title, status: task.status, priority: task.priority, durationMin: task.durationMin, startAt: task.startAt, dueAt: task.dueAt }, reminderWarning };
 }

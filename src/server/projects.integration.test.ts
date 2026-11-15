@@ -1,7 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from './db';
 import { deleteProject, listProjects, ownedProject, parseProjectId, projectTasks, saveProject } from './projects';
 import { createTask, updateTask } from './tasks';
+import { executeVoiceTool } from './voice/tools';
+
+vi.mock('./calendar-sync', () => ({ pushTaskToExternal: vi.fn() }));
+vi.mock('./replanner', () => ({ generateReplanProposal: vi.fn() }));
 
 describe('account-scoped projects and task assignment', () => {
   let userId: string; let otherId: string;
@@ -56,6 +60,22 @@ describe('account-scoped projects and task assignment', () => {
     await expect(createTask({ userId, title: 'Deleted project rejected', projectId: a.id })).rejects.toThrow('NOT_FOUND');
     await updateTask(userId, task.id, { project: { disconnect: true } });
     expect((await listProjects(userId)).unassignedTaskCount).toBe(3);
+  });
+  it('saves voice-created tasks and reminders in the selected folder and rejects an unowned folder', async () => {
+    const folder = await saveProject(userId, null, { name: 'Voice tasks', color: '#8875ff' });
+    const privateFolder = await saveProject(otherId, null, { name: 'Private voice folder', color: '#8875ff' });
+    const scheduledAt = '2099-01-01T10:00:00Z';
+    const task = { title: 'Voice-created task', scheduledAt, durationMin: 30, allowScheduleConflict: true };
+    const reminder = { title: 'Voice-created reminder', scheduledAt };
+    const created = await executeVoiceTool(userId, 'folder-voice', 'task', 'create_task', task, folder.id);
+    expect(created).toMatchObject({ success: true, task: { projectId: folder.id } });
+    expect(await executeVoiceTool(userId, 'folder-voice', 'task', 'create_task', task, folder.id)).toMatchObject(created);
+    expect(await executeVoiceTool(userId, 'folder-voice', 'reminder', 'create_reminder', reminder, folder.id))
+      .toMatchObject({ success: true, task: { projectId: folder.id } });
+    expect(await executeVoiceTool(userId, 'folder-voice', 'unowned', 'create_task', task, privateFolder.id))
+      .toMatchObject({ success: false, error: expect.stringContaining('folder is unavailable') });
+    expect((await projectTasks(userId, folder.id)).map(item => item.title).sort()).toEqual([reminder.title, task.title]);
+    expect(await prisma.task.count({ where: { userId, title: task.title } })).toBe(1);
   });
   it('rejects assigning another account’s project without modifying the task', async () => {
     const other = await saveProject(otherId, null, { name: 'Private', color: '#8875ff' });

@@ -5,7 +5,7 @@ import { calendarVoiceToolNames } from '@/server/voice/configuration';
 import { requireUser } from '@/server/auth';
 import { executeVoiceTool, validateVoiceTool } from '@/server/voice/tools';
 import { z } from 'zod';
-const envelope = z.object({ consent: z.literal(true), scope: z.enum(['general', 'calendar', 'food']).optional(), sessionId: z.string().uuid(), callId: z.string().min(1).max(200), name: z.string().max(50), arguments: z.record(z.string(), z.unknown()) }).strict();
+const envelope = z.object({ consent: z.literal(true), scope: z.enum(['general', 'calendar', 'food']).optional(), sessionId: z.string().uuid(), callId: z.string().min(1).max(200), name: z.string().max(50), projectId: z.string().min(1).max(100).optional(), arguments: z.record(z.string(), z.unknown()) }).strict();
 const headers = { 'Cache-Control': 'private, no-store' };
 async function healthHandlerPOST(req: Request) {
   try {
@@ -15,6 +15,9 @@ async function healthHandlerPOST(req: Request) {
     let body;
     try { body = envelope.parse(JSON.parse(raw)); if (body.scope !== 'food') validateVoiceTool(body.name, body.arguments); }
     catch { return Response.json({ success: false, error: 'Invalid tool arguments. Ask the user to clarify.' }, { status: 400, headers }); }
+    if (body.projectId && (body.scope === 'food' || body.scope === 'calendar' || !['create_task', 'create_reminder'].includes(body.name))) {
+      return Response.json({ success: false, error: 'A folder can only be assigned when creating a task or reminder.' }, { status: 400, headers });
+    }
     if (body.scope === 'food') {
       if (body.name !== 'lookup_food') return Response.json({ success: false, error: 'Food voice supports food lookups only.' }, { status: 400, headers });
       const query = foodQuerySchema.safeParse(body.arguments);
@@ -25,7 +28,7 @@ async function healthHandlerPOST(req: Request) {
       } catch { return Response.json({ success: false, error: 'Food data is temporarily unavailable. Do not invent product facts.' }, { headers }); }
     }
     if (body.scope === 'calendar' && !calendarVoiceToolNames.includes(body.name)) return Response.json({ success: false, error: 'Calendar voice only supports appointments and events.' }, { status: 400, headers });
-    const result = await executeVoiceTool(user.id, body.sessionId, body.callId, body.name, body.arguments);
+    const result = await executeVoiceTool(user.id, body.sessionId, body.callId, body.name, body.arguments, body.projectId);
     return Response.json(result, { headers });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return Response.json({ success: false, error: 'Sign in required.' }, { status: 401, headers });

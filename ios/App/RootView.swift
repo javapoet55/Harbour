@@ -2365,7 +2365,7 @@ struct TaskEditor: View {
         .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(model.busy || checkingAvailability)
         .disabled(checkingAvailability)
-        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView().id(voicePresentationID) }
+        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView(projectID: projectID).id(voicePresentationID) }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Task date", selection: $customDate, displayedComponents: .date)

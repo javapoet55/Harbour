@@ -39,8 +39,8 @@ private final class VoiceSessionResources: ObservableObject {
     let transport: VoiceWebRTCTransport
     let session: VoiceConversationSession
 
-    init(calendarOnly: Bool, foodOnly: Bool) {
-        let executor = VoiceToolExecutor()
+    init(calendarOnly: Bool, foodOnly: Bool, projectID: String?) {
+        let executor = VoiceToolExecutor(projectID: projectID)
         executor.calendarOnly = calendarOnly
         executor.foodOnly = foodOnly
         let transport = VoiceWebRTCTransport()
@@ -56,11 +56,11 @@ struct AddTaskByVoiceView: View {
     private let calendarOnly: Bool
     private let foodContext: FoodVoiceContext?
 
-    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) {
+    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil, projectID: String? = nil) {
         self.askMode = askMode
         self.calendarOnly = calendarOnly
         self.foodContext = foodContext
-        _resources = StateObject(wrappedValue: VoiceSessionResources(calendarOnly: calendarOnly, foodOnly: foodContext != nil))
+        _resources = StateObject(wrappedValue: VoiceSessionResources(calendarOnly: calendarOnly, foodOnly: foodContext != nil, projectID: projectID))
     }
 
     var body: some View {
