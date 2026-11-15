@@ -58,6 +58,8 @@ describe('module guides', () => {
     expect(screen.getByText('How It Works')).toBeTruthy();
     expect(screen.getByText(guide.title)).toBeTruthy();
     expect(screen.getByText(guide.subtitle)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    expect(screen.getByText('Continue')).toBeTruthy();
     guide.steps.forEach(([title, text], index) => {
       const step = within(screen.getByTestId(`module-guide-step-${index + 1}`));
       expect(step.getByText(String(index + 1))).toBeTruthy();
@@ -74,7 +76,7 @@ describe('module guides', () => {
     expect(GUIDES.shopping.benefit.title).toBe('Save time. Shop smarter.');
   });
 
-  it('"Got it!" continues; Back and "Back to Home" both return to the chooser', async () => {
+  it('"Continue" continues; Back and "Back to Home" both return to the chooser', async () => {
     const onContinue = jest.fn();
     const onHome = jest.fn();
     await render(<WellnessModuleGuide kind="pomodoro" onContinue={onContinue} onHome={onHome} />);

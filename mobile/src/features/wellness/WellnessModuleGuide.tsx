@@ -129,9 +129,9 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
             <Text style={[styles.subheadline, { color: nexdoSecondary }]}>{guide.benefit.text}</Text>
           </View>
         </View>
-        <Pressable accessibilityLabel="Got it!" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
+        <Pressable accessibilityLabel="Continue" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
           <LinearGradient colors={[withAlpha(guide.color, 0.75), guide.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primary}>
-            <Text style={styles.primaryText}>Got it!</Text>
+            <Text style={styles.primaryText}>Continue</Text>
           </LinearGradient>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onHome} style={styles.home} testID="module-guide-home">
