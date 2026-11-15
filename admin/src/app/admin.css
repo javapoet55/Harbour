@@ -172,14 +172,14 @@
   .admin-reports-links { display:flex; margin:0; }
 }
 
-.admin-ask-page { padding:clamp(12px,2.4vw,34px); border-radius:26px; background:radial-gradient(ellipse at 88% 8%,#ded8ff 0%,transparent 45%),linear-gradient(145deg,#f7f7ff,#f3effe 72%,#f8f7ff); color:#131b43; }
-.admin-ask-hero { position:relative; isolation:isolate; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; min-height:110px; margin-bottom:18px; }
+.admin-ask-page { isolation:isolate; padding:clamp(12px,2.4vw,34px); border-radius:26px; background:radial-gradient(ellipse at 88% 8%,#ded8ff 0%,transparent 45%),linear-gradient(145deg,#f7f7ff,#f3effe 72%,#f8f7ff); color:#131b43; }
+.admin-ask-hero { position:relative; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; min-height:110px; margin-bottom:18px; }
 .admin-ask-title { display:flex; align-items:flex-start; gap:15px; }
 .admin-ask-title>svg { flex:none; width:36px; height:36px; margin-top:9px; color:#763ced; }
 .admin-ask-title h1 { font-size:clamp(34px,4vw,57px); font-weight:800; line-height:1.02; letter-spacing:-.055em; margin:0; }
 .admin-ask-title h1 span { color:#6739d8; background:linear-gradient(105deg,#9d34e2,#345dea); background-clip:text; -webkit-text-fill-color:transparent; }
 .admin-ask-title p { margin:10px 0 0; max-width:610px; color:#394469; font-size:14px; line-height:1.5; }
-.admin-ask-art { display:none; position:absolute; right:8px; top:42px; width:195px; height:auto; mix-blend-mode:multiply; pointer-events:none; z-index:-1; }
+.admin-ask-art { display:none; position:absolute; right:8px; top:42px; width:195px; height:auto; mix-blend-mode:multiply; pointer-events:none; mask-image:radial-gradient(ellipse closest-side,#000 76%,transparent 100%); }
 .admin-ask-hero .admin-range-filter summary { background:#ffffffd9; border-color:#ddd5fb; color:#252352; border-radius:14px; }
 .admin-ask-topics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .admin-ask-topic { display:flex; align-items:center; text-align:left; gap:10px; padding:12px; border:1px solid transparent; border-radius:17px; color:#141b40; background:var(--topic-bg); box-shadow:0 6px 16px #4b389b0c; cursor:pointer; }
