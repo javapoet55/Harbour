@@ -248,3 +248,7 @@
 @media(max-width:480px) {
   .admin-metrics.admin-overview-metrics { grid-template-columns:minmax(0,1fr); }
 }
+.admin-overview-recent-scroll { overflow-x:auto; }
+.admin-overview-recent thead th { text-align:left; color:#52627f; font-size:11px; padding:5px 6px; }
+.admin-overview-recent td { overflow-wrap:anywhere; vertical-align:top; }
+.admin-overview-recent time { white-space:nowrap; }

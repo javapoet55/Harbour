@@ -96,10 +96,14 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
 
   const planByUser = new Map(planRows.map((row) => [row.userId, normalizeAdminPlan(row.value)]));
   const locationByUser = new Map<string, { city?: string; country?: string }>();
-  const deviceByUser = new Map<string, string[]>();
+  const deviceByUser = new Map<string, { model?: string; platform?: string }>();
   profileRows.forEach((row) => {
     if (row.key.startsWith('device:')) {
-      deviceByUser.set(row.userId, [...(deviceByUser.get(row.userId) ?? []), row.value]);
+      const device = deviceByUser.get(row.userId) ?? {};
+      const value = row.value.trim().slice(0, 100);
+      if (row.key === 'device:model' && value) device.model = value;
+      if (row.key === 'device:platform' && value) device.platform = value;
+      deviceByUser.set(row.userId, device);
       return;
     }
     const location = locationByUser.get(row.userId) ?? {};
@@ -108,14 +112,19 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
     locationByUser.set(row.userId, location);
   });
   const deviceCounts = { iPhone: 0, Android: 0, otherOrUnknown: 0 };
+  const deviceLabelByUser = new Map<string, string>();
   for (const user of users) {
-    const recorded = deviceByUser.get(user.id) ?? [];
+    const saved = deviceByUser.get(user.id);
+    const recorded = [saved?.model ?? "", saved?.platform ?? ""];
     const classify = (device: string) => /\bandroid\b/i.test(device) ? 'Android'
       : /iphone/i.test(device) ? 'iPhone' : null;
     const model = recorded.map(classify).find(Boolean);
     const explicitlyOther = recorded.some(value => /ipad|ipod|macos|windows|linux/i.test(value));
     const inferred = explicitlyOther ? null : classify(user.pushSubscriptions[0]?.userAgent ?? '');
-    deviceCounts[model ?? inferred ?? 'otherOrUnknown'] += 1;
+    const category = model ?? inferred;
+    deviceCounts[category ?? 'otherOrUnknown'] += 1;
+    const label = saved?.model || category || saved?.platform;
+    if (label) deviceLabelByUser.set(user.id, label);
   }
   const inCurrentPeriod = (date: Date) => date >= since && date < until;
   const voiceByUser = new Map<string, number>();
@@ -161,6 +170,7 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
     name: user.name,
     email: user.email,
     plan: planByUser.get(user.id) ?? 'FREE',
+    device: deviceLabelByUser.get(user.id) ?? null,
     city: locationByUser.get(user.id)?.city || null,
     country: locationByUser.get(user.id)?.country || null,
     timeZone: user.timeZone,

@@ -12,6 +12,7 @@ export const adminSnapshotUserSchema = z.object({
   name: z.string(),
   email: z.string(),
   plan: adminPlanSchema,
+  device: z.string().nullable().optional(),
   city: z.string().nullable(),
   country: z.string().nullable(),
   timeZone: z.string(),

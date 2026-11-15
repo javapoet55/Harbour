@@ -35,8 +35,28 @@ export function OverviewAnalytics({data,rangeLabel}:{data:Data;rangeLabel:string
       <Panel title="System health" action={eye('health')} className="admin-span-4">
         <table className="admin-list"><tbody><tr><td>Application</td><td><span className="admin-status">Online</span></td></tr><tr><td>Database</td><td><span className="admin-status">Connected</span></td></tr><tr><td>Admin access</td><td><span className="admin-status">Enforced</span></td></tr><tr><td>Metrics refreshed</td><td>{formatVoiceDate(data.generatedAt)}</td></tr></tbody></table>
       </Panel>
-      <Panel title="Recent signups" className="admin-span-6" action={eye('signups')}><table className="admin-list"><tbody>{signups.slice(0,6).map((user)=><tr key={user.id}><td>{user.email}</td><td>{user.plan}</td><td>{formatVoiceDate(user.createdAt)}</td></tr>)}</tbody></table></Panel>
-      <Panel title="Recent voice activity" className="admin-span-6" action={eye('recentVoice')}><table className="admin-list"><tbody>{data.recentVoice.slice(0,6).map((row)=><tr key={row.id}><td>{row.user}</td><td>{formatVoiceDate(row.date)}</td><td>{row.minutes === null ? 'Duration unavailable' : `${row.minutes} min`}</td><td>{row.type}</td></tr>)}</tbody></table></Panel>
+      <Panel title="Recent signups" className="admin-span-6" action={eye('signups')}>
+        <div className="admin-overview-recent-scroll">
+          <table className="admin-list admin-overview-recent">
+            <thead><tr><th scope="col">Email</th><th scope="col">Plan</th><th scope="col">Device</th><th scope="col">City</th><th scope="col">Country</th><th scope="col">Signed up</th></tr></thead>
+            <tbody>{signups.slice(0,6).map(user => <tr key={user.id}>
+              <td>{user.email}</td><td>{user.plan}</td><td>{user.device ?? '—'}</td><td>{user.city ?? '—'}</td><td>{user.country ?? '—'}</td>
+              <td><time dateTime={user.createdAt}>{formatRecentDate(user.createdAt)}</time></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Recent voice activity" className="admin-span-6" action={eye('recentVoice')}>
+        <div className="admin-overview-recent-scroll">
+          <table className="admin-list admin-overview-recent">
+            <thead><tr><th scope="col">User</th><th scope="col">Date</th><th scope="col">Duration</th><th scope="col">Type</th></tr></thead>
+            <tbody>{data.recentVoice.slice(0,6).map(row => <tr key={row.id}>
+              <td>{row.user}</td><td><time dateTime={row.date}>{formatRecentDate(row.date)}</time></td>
+              <td>{row.minutes === null ? 'Duration unavailable' : `${row.minutes} min`}</td><td>{row.type}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </Panel>
     </div>
  <div id="overview-details" ref={details} tabIndex={-1} className="admin-voice-details">{selected&&table&&<Panel title={`${names[selected]} — details`} action={<button onClick={()=>setSelected(null)}>Close details</button>}>
  <p>{table.note} Activity timestamps use Pacific Time (PST/PDT).</p>
@@ -44,6 +64,14 @@ export function OverviewAnalytics({data,rangeLabel}:{data:Data;rangeLabel:string
  {table.rows.length>25&&<div className="admin-voice-pagination"><button disabled={!page} onClick={()=>setPage(p=>p-1)}>Previous</button><span>Page {page+1} of {Math.ceil(table.rows.length/25)} · {table.rows.length} rows</span><button disabled={(page+1)*25>=table.rows.length} onClick={()=>setPage(p=>p+1)}>Next</button></div>}
  </Panel>}</div>
  </>;
+}
+
+const recentDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles', timeZoneName: 'short',
+  month: 'short', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit',
+});
+function formatRecentDate(value: string) {
+  return recentDateFormatter.format(new Date(value));
 }
 
 function overviewDevices(data: Data) {
