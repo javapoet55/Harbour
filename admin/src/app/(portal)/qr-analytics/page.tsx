@@ -8,7 +8,9 @@ const platformNames = { android: 'Android', ios: 'iOS', other: 'Other' };
 const destinations = { android: 'Google Play', ios: 'App Store', other: 'Store links' };
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
 const dateTime = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC',
+  year: 'numeric', month: 'short', day: 'numeric',
+  hour: 'numeric', minute: '2-digit', second: '2-digit',
+  timeZone: 'America/Los_Angeles', timeZoneName: 'short',
 });
 const number = new Intl.NumberFormat('en-US');
 
@@ -43,7 +45,7 @@ export default async function QrAnalyticsPage({ searchParams }: {
   const today = new Date().toISOString().slice(0, 10);
   const data = await adminData(`/api/admin/qr-analytics?from=${range.from}&to=${range.to}`, qrAnalyticsSchema);
   return <div className="admin-qr-report">
-    <PageHeading title="QR Code Analytics" description="Opens of the NexDo homepage QR link. Dates and times are in UTC.">
+    <PageHeading title="QR Code Analytics" description="Opens of the NexDo homepage QR link. Daily counts and date filters use UTC. Recent opens use Pacific time.">
       <AdminDateRangeFilter from={range.from} to={range.to} today={today} label={adminDateRangeLabel(range)} pathname="/qr-analytics"/>
     </PageHeading>
     <p className="admin-callout">Locations are estimated. Device models appear when browsers provide them. Repeat opens can count separately.</p>
@@ -63,7 +65,7 @@ export default async function QrAnalyticsPage({ searchParams }: {
       <p>Up to 100 opens in the selected date range.</p>
       <div className="admin-table-scroll">
         <table className="admin-table">
-          <thead><tr><th scope="col">Opened (UTC)</th><th scope="col">City</th><th scope="col">State or region</th><th scope="col">Country</th><th scope="col">Platform</th><th scope="col">Phone model</th><th scope="col">Destination</th></tr></thead>
+          <thead><tr><th scope="col">Opened (Pacific time)</th><th scope="col">City</th><th scope="col">State or region</th><th scope="col">Country</th><th scope="col">Platform</th><th scope="col">Phone model</th><th scope="col">Destination</th></tr></thead>
           <tbody>
             {data.recent.length ? data.recent.map(row => <tr key={row.id}>
               <td><time dateTime={row.openedAt}>{dateTime.format(new Date(row.openedAt))}</time></td>
