@@ -20,7 +20,7 @@ export function UsersAnalytics({data,label}:{data:Data;label:string}) {
  <MetricCard icon={<Mic2/>} value={`${formatNumber(data.metrics.voiceMinutes)} min`} label="Voice minutes" change={data.changes.voiceMinutes} action={eye('voice')}/>
  <MetricCard icon={<CalendarDays/>} value={formatNumber(data.metrics.activeUsers)} label="Active users" note={label} action={eye('active')}/>
  </div>
- <Panel title={`Users (${data.users.length.toLocaleString()})`}><p>Sign-up and activity timestamps use Pacific Time (PST/PDT).</p><AdminUsersTable users={data.users}/></Panel>
+ <Panel title={`Users (${data.users.length.toLocaleString()})`}><p>Sign-up and activity timestamps use Pacific Time (PST/PDT). City and country come from saved profiles. Device can also come from account-linked activity.</p><AdminUsersTable users={data.users}/></Panel>
  <div id="users-details" ref={details} tabIndex={-1} className="admin-voice-details">{selected&&table&&<Panel title={`${labels[selected]} — details`} action={<button onClick={()=>setSelected(null)}>Close details</button>}>
  <p>{table.note} Activity timestamps use Pacific Time (PST/PDT).</p>
  <div className="admin-table-scroll"><table className="admin-list"><thead><tr>{table.columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{table.rows.slice(page*25,page*25+25).map((row,i)=><tr key={page*25+i}>{row.map((cell,j)=><td key={j}>{cell}</td>)}</tr>)}</tbody></table>{!table.rows.length&&<div className="admin-empty">No records in this period.</div>}</div>

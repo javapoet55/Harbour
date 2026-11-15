@@ -1,3 +1,4 @@
+import { phonePlatform, reportedDevice } from './account-device';
 import { prisma } from '@/server/db';
 import { normalizeVoiceSeconds } from '@/server/voice/usage';
 
@@ -80,11 +81,14 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
     prisma.user.findMany({
       where: { deletedAt: null },
       select: { id: true, email: true, name: true, timeZone: true, createdAt: true, updatedAt: true, emailVerifiedAt: true,
-        pushSubscriptions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { userAgent: true } } },
+        pushSubscriptions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { userAgent: true } },
+        feedback: { where: { bugReport: { expiresAt: { gt: generatedAt } } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1,
+          select: { bugReport: { select: { metadata: true } } } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.userMemory.findMany({ where: { key: 'billing:plan' }, select: { userId: true, value: true, updatedAt: true } }),
-    prisma.userMemory.findMany({ where: { key: { in: ['profile:city', 'profile:country', 'device:platform', 'device:model'] } }, select: { userId: true, key: true, value: true } }),
+    prisma.userMemory.findMany({ where: { key: { in: ['profile:city', 'profile:country', 'device:platform', 'device:model', 'device:login'] } }, select: { userId: true, key: true, value: true } }),
     prisma.userMemory.findMany({ where: { kind: 'voice_usage', updatedAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, value: true, source: true, updatedAt: true } }),
     prisma.voiceSession.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, status: true, locale: true, createdAt: true, _count: { select: { transcripts: true } } }, orderBy: { createdAt: 'desc' }, take: 10000 }),
     prisma.assistantAction.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, intent: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 20000 }),
@@ -96,13 +100,14 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
 
   const planByUser = new Map(planRows.map((row) => [row.userId, normalizeAdminPlan(row.value)]));
   const locationByUser = new Map<string, { city?: string; country?: string }>();
-  const deviceByUser = new Map<string, { model?: string; platform?: string }>();
+  const deviceByUser = new Map<string, { model?: string; platform?: string; login?: string }>();
   profileRows.forEach((row) => {
     if (row.key.startsWith('device:')) {
       const device = deviceByUser.get(row.userId) ?? {};
       const value = row.value.trim().slice(0, 100);
       if (row.key === 'device:model' && value) device.model = value;
       if (row.key === 'device:platform' && value) device.platform = value;
+      if (row.key === 'device:login' && value) device.login = value;
       deviceByUser.set(row.userId, device);
       return;
     }
@@ -115,15 +120,14 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
   const deviceLabelByUser = new Map<string, string>();
   for (const user of users) {
     const saved = deviceByUser.get(user.id);
-    const recorded = [saved?.model ?? "", saved?.platform ?? ""];
-    const classify = (device: string) => /\bandroid\b/i.test(device) ? 'Android'
-      : /iphone/i.test(device) ? 'iPhone' : null;
-    const model = recorded.map(classify).find(Boolean);
-    const explicitlyOther = recorded.some(value => /ipad|ipod|macos|windows|linux/i.test(value));
-    const inferred = explicitlyOther ? null : classify(user.pushSubscriptions[0]?.userAgent ?? '');
+    const reportModel = reportedDevice(user.feedback[0]?.bugReport?.metadata);
+    const recorded = [saved?.model, saved?.platform, reportModel];
+    const model = recorded.map(phonePlatform).find(Boolean);
+    const explicitlyOther = recorded.some(value => /ipad|ipod|macos|windows|linux/i.test(value ?? ''));
+    const inferred = explicitlyOther ? null : phonePlatform(saved?.login ?? user.pushSubscriptions[0]?.userAgent);
     const category = model ?? inferred;
     deviceCounts[category ?? 'otherOrUnknown'] += 1;
-    const label = saved?.model || category || saved?.platform;
+    const label = saved?.model || reportModel || category || saved?.platform;
     if (label) deviceLabelByUser.set(user.id, label);
   }
   const inCurrentPeriod = (date: Date) => date >= since && date < until;
