@@ -42,14 +42,16 @@ export default async function QrAnalyticsPage({ searchParams }: {
   const range = parseAdminDateRange(query.from, query.to);
   const today = new Date().toISOString().slice(0, 10);
   const data = await adminData(`/api/admin/qr-analytics?from=${range.from}&to=${range.to}`, qrAnalyticsSchema);
-  return <>
+  return <div className="admin-qr-report">
     <PageHeading title="QR Code Analytics" description="Opens of the NexDo homepage QR link. Dates and times are in UTC.">
       <AdminDateRangeFilter from={range.from} to={range.to} today={today} label={adminDateRangeLabel(range)} pathname="/qr-analytics"/>
     </PageHeading>
     <p className="admin-callout">Locations are estimated. Device models appear when browsers provide them. Repeat opens can count separately.</p>
     <div className="admin-grid">
-    <Panel title={`${number.format(data.total)} QR opens`} className="admin-span-12">
-      <LineChart data={data.days.map(({ day, count }) => ({ label: day, value: count }))} valueLabel="QR opens per UTC day"/>
+    <Panel title={`${number.format(data.total)} QR ${data.total === 1 ? "open" : "opens"}`} className="admin-span-12">
+      <div className="admin-qr-chart">
+        <LineChart data={data.days.map(({ day, count }) => ({ label: day, value: count }))} valueLabel="QR opens per UTC day"/>
+      </div>
     </Panel>
     <Breakdown title="Platforms and store destinations" label="Platform and destination"
       rows={data.platforms.map(({ platform, count }) => ({ name: `${platformNames[platform]} · ${destinations[platform]}`, count }))}/>
@@ -74,5 +76,5 @@ export default async function QrAnalyticsPage({ searchParams }: {
       </div>
     </Panel>
     </div>
-  </>;
+  </div>;
 }
