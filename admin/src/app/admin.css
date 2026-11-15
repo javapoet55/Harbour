@@ -125,3 +125,7 @@
 .admin-table-scroll { overflow-x: auto; }
 .admin-table-scroll th { text-align: left; padding: 10px 6px; color: #64718d; font-weight: 600; }
 .admin-voice-pagination { display: flex; gap: 16px; align-items: center; margin-top: 16px; }
+
+.admin-table.admin-qr-breakdown { min-width: 0; }
+.admin-qr-breakdown td { white-space: normal; overflow-wrap: anywhere; }
+.admin-span-12 { grid-column: 1 / -1; }

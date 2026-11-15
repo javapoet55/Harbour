@@ -962,3 +962,16 @@ model AiApiReceipt {
   @@index([createdAt])
   @@index([operation, createdAt])
 }
+
+model QrOpen {
+  id        String   @id @default(cuid())
+  openedAt  DateTime
+  openedDay String
+  platform  String
+  model     String?
+  country   String?
+  region    String?
+  city      String?
+
+  @@index([openedAt, id])
+}

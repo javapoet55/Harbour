@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, Bug, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, Users, MessageSquare } from 'lucide-react';
+import { BarChart3, Bug, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users, MessageSquare } from 'lucide-react';
 
 const links = [
   { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
@@ -13,6 +13,7 @@ const links = [
   { href: '/ask', label: 'Ask Nexdo', icon: Bot },
   { href: '/users', label: 'Users', icon: Users },
   { href: '/usage', label: 'Usage Analytics', icon: BarChart3 },
+  { href: '/qr-analytics', label: 'QR Code Analytics', icon: QrCode },
   { href: '/engagement', label: 'Firebase Engagement', icon: BarChart3 },
   { href: '/voice', label: 'Voice Analytics', icon: Mic2 },
   { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
