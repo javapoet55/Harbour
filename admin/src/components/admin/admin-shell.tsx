@@ -7,12 +7,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { BarChart3, Bug, Bot, ChevronDown, ClipboardList, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, QrCode, Users } from 'lucide-react';
 
 const primaryLinks = [
-  { href: '/', label: 'Overview', icon: Gauge },
   { href: '/ask', label: 'Ask Nexdo', icon: Bot },
+  { href: '/', label: 'Overview', icon: Gauge },
   { href: '/users', label: 'Users', icon: Users },
 ];
 
 const reportLinks = [
+  { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/usage', label: 'Usage Analytics', icon: BarChart3 },
   { href: '/qr-analytics', label: 'QR Code Analytics', icon: QrCode },
   { href: '/engagement', label: 'Firebase Engagement', icon: BarChart3 },
@@ -21,7 +22,6 @@ const reportLinks = [
 ];
 
 const otherLinks = [
-  { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/health', label: 'System Health', icon: HeartPulse },
 ];
 
