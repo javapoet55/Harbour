@@ -34,6 +34,7 @@ export const adminSnapshotSchema = z.object({
     voiceMinutes: z.number(), voiceSessions: z.number(), estimatedMrr: z.number(), verifiedUsers: z.number(),
   }),
   changes: z.object({ newUsers: z.number(), aiActions: z.number(), voiceMinutes: z.number() }),
+  deviceCounts: z.object({ iPhone: z.number(), Android: z.number(), otherOrUnknown: z.number() }).optional(),
   planCounts: z.object({ FREE: z.number(), PRO: z.number(), MAX: z.number() }),
   users: z.array(adminSnapshotUserSchema),
   featureCounts: z.array(z.object({ label: z.string(), value: z.number(), color: z.string() })),

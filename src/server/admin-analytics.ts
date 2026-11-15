@@ -68,7 +68,7 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
   const [
     users,
     planRows,
-    locationRows,
+    profileRows,
     voiceRows,
     voiceSessions,
     actions,
@@ -79,11 +79,12 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
   ] = await Promise.all([
     prisma.user.findMany({
       where: { deletedAt: null },
-      select: { id: true, email: true, name: true, timeZone: true, createdAt: true, updatedAt: true, emailVerifiedAt: true },
+      select: { id: true, email: true, name: true, timeZone: true, createdAt: true, updatedAt: true, emailVerifiedAt: true,
+        pushSubscriptions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { userAgent: true } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.userMemory.findMany({ where: { key: 'billing:plan' }, select: { userId: true, value: true, updatedAt: true } }),
-    prisma.userMemory.findMany({ where: { key: { in: ['profile:city', 'profile:country'] } }, select: { userId: true, key: true, value: true } }),
+    prisma.userMemory.findMany({ where: { key: { in: ['profile:city', 'profile:country', 'device:platform', 'device:model'] } }, select: { userId: true, key: true, value: true } }),
     prisma.userMemory.findMany({ where: { kind: 'voice_usage', updatedAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, value: true, source: true, updatedAt: true } }),
     prisma.voiceSession.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, status: true, locale: true, createdAt: true, _count: { select: { transcripts: true } } }, orderBy: { createdAt: 'desc' }, take: 10000 }),
     prisma.assistantAction.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, intent: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 20000 }),
@@ -95,12 +96,27 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
 
   const planByUser = new Map(planRows.map((row) => [row.userId, normalizeAdminPlan(row.value)]));
   const locationByUser = new Map<string, { city?: string; country?: string }>();
-  locationRows.forEach((row) => {
+  const deviceByUser = new Map<string, string[]>();
+  profileRows.forEach((row) => {
+    if (row.key.startsWith('device:')) {
+      deviceByUser.set(row.userId, [...(deviceByUser.get(row.userId) ?? []), row.value]);
+      return;
+    }
     const location = locationByUser.get(row.userId) ?? {};
     if (row.key === 'profile:city') location.city = row.value.trim().slice(0, 100);
     if (row.key === 'profile:country') location.country = row.value.trim().slice(0, 100);
     locationByUser.set(row.userId, location);
   });
+  const deviceCounts = { iPhone: 0, Android: 0, otherOrUnknown: 0 };
+  for (const user of users) {
+    const recorded = deviceByUser.get(user.id) ?? [];
+    const classify = (device: string) => /\bandroid\b/i.test(device) ? 'Android'
+      : /iphone/i.test(device) ? 'iPhone' : null;
+    const model = recorded.map(classify).find(Boolean);
+    const explicitlyOther = recorded.some(value => /ipad|ipod|macos|windows|linux/i.test(value));
+    const inferred = explicitlyOther ? null : classify(user.pushSubscriptions[0]?.userAgent ?? '');
+    deviceCounts[model ?? inferred ?? 'otherOrUnknown'] += 1;
+  }
   const inCurrentPeriod = (date: Date) => date >= since && date < until;
   const voiceByUser = new Map<string, number>();
   voiceRows.filter((row) => inCurrentPeriod(row.updatedAt)).forEach((row) => voiceByUser.set(row.userId, (voiceByUser.get(row.userId) ?? 0) + normalizeVoiceSeconds(row.value) / 60));
@@ -194,6 +210,7 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
       voiceMinutes: growth(voiceMinutes, previousVoiceMinutes),
     },
     planCounts,
+    deviceCounts,
     users: adminUsers,
     featureCounts,
     trends: {
