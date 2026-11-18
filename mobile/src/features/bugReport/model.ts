@@ -172,6 +172,39 @@ export const BUG_FAILURE = {
  *   Swift's `localizedDescription`;
  * - anything else → "try again later".
  */
+/** `BugReportDetailedStatus.title` (Sources/NexdoCore/BugReport.swift:35-51, a61b01a). */
+const DETAILED_TITLES: Record<string, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  future: 'Future',
+  not_applicable: 'Not Applicable',
+  closed: 'Closed',
+};
+
+/**
+ * `report.detailedStatus?.title ?? report.status.title` (BugReportView.swift:251). A status this app does not know
+ * falls back to Open / Closed; Swift's closed enum would fail the whole page instead (§25 Swift bug 8).
+ */
+export function bugReportStatusTitle(report: { status: 'open' | 'closed'; detailedStatus?: string | null }): string {
+  const detailed = report.detailedStatus ? DETAILED_TITLES[report.detailedStatus] : undefined;
+  return detailed ?? (report.status === 'open' ? 'Open' : 'Closed');
+}
+
+/** `BugReportHistory.load(after:)`'s three messages (BugReportView.swift:293-300). */
+export const HISTORY_FAILURE = {
+  signedOut: 'Your session has expired. Sign in again to view your reports.',
+  unavailable: 'Report history is unavailable on this server.',
+  other: 'Couldn’t load your bug reports. Try again.',
+};
+
+export function historyFailureMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.code === 'SIGNED_OUT') return HISTORY_FAILURE.signedOut;
+    if (error.status === 404 || error.status === 405) return HISTORY_FAILURE.unavailable;
+  }
+  return HISTORY_FAILURE.other;
+}
+
 export function bugFailureMessage(error: unknown): string {
   if (isApiError(error)) {
     if (error.status === 404) return BUG_FAILURE.unavailable;

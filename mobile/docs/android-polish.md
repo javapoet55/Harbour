@@ -3041,3 +3041,28 @@ caption "Folder" (`app/task/[id].tsx`).
 - **Phone check:** Shopping → a list → Schedule Email. One Time is selected, Send date shows tomorrow, pickup
   11 AM – 12 PM. Tap Repeat: Repeat weekly on appears and permission turns off. Save a one-time email to a test
   address. The status card says "One-time email · Active" with no "Next run" after the worker queues it.
+
+### 71.5 Report Bugs from Settings: open and closed reports (§25 row 5; fbe38a9, a61b01a)
+
+`src/features/bugReport/BugReportScreen.tsx`, `model.ts`, `src/api/feedback.ts`.
+
+- Opened from My Page → **Report Bugs** (diagnostics screen `settings`), the first page is now **Report Bugs**:
+  **Open / Closed**, that status's reports, then the shake toggle. **Report Bug** opens the form as before. After
+  sending, **Done** goes back to the history (Open) instead of closing; × still closes. Opened by a shake or from
+  anywhere else, the screen is unchanged (introduction first, Done closes).
+- Each report: the description, the status with `circle` / `checkmark.circle` ("Open", "In Progress", "Future",
+  "Not Applicable", "Closed"), "Submitted Nov 15, 2026" on the phone's clock, and the reference in monospace.
+  "Loading reports…", **Refresh reports** (**Retry** after a failed first load), **Load more reports** from the
+  server's cursor, and Swift's three failure messages.
+- The Open / Closed picker is `SettingsSegments`, so Android draws it with the §9 segment rules.
+- The shake toggle says "Shake **phone** to report a bug" on Android, as the introduction already did (QA M-03).
+- **ANDROID AHEAD of §25 Swift bug 8:** a workflow status this app doesn't know shows as Open or Closed, by list.
+  In Swift it fails the whole page.
+- A page that arrives after the list has gone (status switched, report closed) is dropped, like Swift's `.task`
+  cancellation. Like Swift, there is no separate owner check on the history (§25 Swift bug 9). It is fetched with
+  the current session, so it can only ever be the signed-in account's.
+- Tests: `history.test.tsx` (11 cases: the page, Closed, empty, Load more, Retry, Done back to the history, the
+  unchanged path, the titles, the messages, the request).
+- **Phone check:** My Page → Report Bugs. The page is titled Report Bugs with Open selected and your reports
+  listed. Closed switches the list. Report Bug → send a test report → Done returns to the Open list, with the new
+  report at the top. Shake to open it from another screen: the old introduction shows.
