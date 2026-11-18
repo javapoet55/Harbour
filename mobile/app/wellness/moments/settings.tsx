@@ -9,7 +9,7 @@ import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackTi
 import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../src/features/moments/form';
 import { momentsStore, reminderStatusText, useMoments } from '../../../src/features/moments/store';
 import { useOAuthCallback } from '../../../src/lib/oauthCallbacks';
-import { textStyles, useTheme } from '../../../src/theme';
+import { textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 /**
  * `MomentSettingsView` (ios/App/MomentEditor.swift:205-245): the imports, the connected Gmail account,
@@ -21,7 +21,7 @@ import { textStyles, useTheme } from '../../../src/theme';
 
 const confirmGmail = (ticket: string) =>
   momentsStore.getState().request<MomentOK>('connectEmailConfirm', { ticket }).then(() => undefined);
-export default function MomentSettingsScreen() {
+function MomentSettingsScreen() {
   const theme = useTheme();
   const snapshot = useMoments((state) => state.snapshot);
   const error = useMoments((state) => state.error);
@@ -183,3 +183,6 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   error: { marginHorizontal: 32, marginTop: 12 },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(MomentSettingsScreen);

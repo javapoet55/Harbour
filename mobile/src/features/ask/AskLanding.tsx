@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { FittedText } from '../../components/AskParts';
@@ -10,7 +10,7 @@ import { Text } from '../../components/Text';
 import { ASK_LANDING_CARDS, ASK_MAX_LENGTH, askIntent } from '../../lib/askIntents';
 import { firstName } from '../../store/lastSignedIn';
 import { useSession } from '../../store/session';
-import { brand, inputText, isAndroid, linearGradientStops, palettes } from '../../theme';
+import { brand, inputText, isAndroid, linearGradientStops, useTheme } from '../../theme';
 import { swiftColors } from '../wellness/style';
 import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
 
@@ -20,16 +20,15 @@ import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
  * request field and "Powered by Nexdo AI". "The dashboard only chooses an entry point; requests retain
  * the assistant's existing consent, review, and execution flow" — every exit is `ask`, `voice` or `close`.
  *
- * FIXED LIGHT, like the Daily Brief it opens: Swift's backdrop fades to `.white` and the field is
- * `.white`, under `nexdoInk`, which is white in dark mode — white on white (§22 "For the team"). The
- * light values are kept in dark mode (android-polish.md, Phase 12 Run A).
+ * FOLLOWS THE THEME since Phase 14 (61788dc; captures `ask-ai-landing-v4`, `-dark`): the backdrop fades to
+ * `systemBackground` and the field is `secondarySystemGroupedBackground`, so dark mode is no longer white on
+ * white and the Phase 12 fixed-light values are gone (docs/android-polish.md §61). The Daily Brief it opens
+ * stays fixed light.
  *
- * NOT PORTED: the Shopping and Moments sheets (`destination`, :78-85) and `typing = true` (:110):
- * `select(_:)` reaches them only for cards 5-7, and there are four cards.
+ * NOT PORTED: the Shopping and Moments sheets (`destination`, :78-85): `select(_:)` reaches them only for
+ * cards 5-7, and there are four cards.
  */
 
-const ink = palettes.light.ink;
-const secondary = palettes.light.secondary;
 const tones = { blue: swiftColors.blue, green: swiftColors.green, orange: swiftColors.orange, purple: swiftColors.purple };
 /** `NexdoTheme.gradient`. */
 const MIC_GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
@@ -62,16 +61,19 @@ export function AskLanding({
   onClose: () => void;
   onFocusChange: (focused: boolean) => void;
 }) {
+  const theme = useTheme();
+  const { ink, secondary } = theme.colors;
   const large = useAccessibilityTextSize();
   const name = useSession((state) => state.profile?.name ?? '');
   const sendDisabled = !sendEnabled || busy;
+  const field = useRef<TextInput>(null);
 
   return (
     <LinearGradient
-      colors={[withAlpha(swiftColors.cyan, 0.08), withAlpha(swiftColors.purple, 0.06), '#FFFFFF']}
+      colors={[withAlpha(swiftColors.cyan, 0.08), withAlpha(swiftColors.purple, 0.06), theme.colors.background]}
       end={{ x: 1, y: 1 }}
       start={{ x: 0, y: 0 }}
-      style={styles.landing}
+      style={[styles.landing, { backgroundColor: theme.colors.background }]}
       testID="ask-landing"
     >
       <View style={styles.header}>
@@ -80,7 +82,8 @@ export function AskLanding({
           <Text style={[styles.title2, styles.bold, { color: ink }]}>Nexdo</Text>
           <Text style={[styles.caption, { color: secondary }]}>Your AI productivity companion</Text>
         </View>
-        <Pressable accessibilityLabel="Close Ask Nexdo" accessibilityRole="button" onPress={onClose} style={styles.close} testID="ask-close">
+        {/* `secondarySystemGroupedBackground.opacity(0.8)` behind the xmark. */}
+        <Pressable accessibilityLabel="Close Ask Nexdo" accessibilityRole="button" onPress={onClose} style={[styles.close, { backgroundColor: withAlpha(theme.colors.surface, 0.8) }]} testID="ask-close">
           <TaskSymbol color={ink} name="xmark" size={20} />
         </Pressable>
       </View>
@@ -155,20 +158,30 @@ export function AskLanding({
             <Waveform />
           </View>
           <Text style={[styles.headline, { color: ink }]}>Ask by Voice</Text>
-          <Text style={[styles.caption, { color: secondary }]}>Tap and speak naturally. I’m listening…</Text>
+          {/* 61788dc: was "Tap and speak naturally. I’m listening…". */}
+          <Text style={[styles.caption, { color: secondary }]}>Tap to start a voice conversation</Text>
         </Pressable>
-        <View style={styles.fieldRow}>
-          <View style={[styles.keyboard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.05) }]}>
+        <View style={[styles.fieldRow, { backgroundColor: theme.colors.surface }]}>
+          {/* 61788dc (:59-67): the keyboard glyph is a button that focuses the field (`typing = true`). */}
+          <Pressable
+            accessibilityHint="Puts the cursor in the request field"
+            accessibilityLabel="Type your request"
+            accessibilityRole="button"
+            onPress={() => field.current?.focus()}
+            style={[styles.keyboard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.05) }]}
+            testID="ask-landing-keyboard"
+          >
             <TaskSymbol color={ink} name="keyboard" size={20} />
-          </View>
+          </Pressable>
           <TextInput
+            ref={field}
             accessibilityLabel="Type your request"
             multiline
             onBlur={() => onFocusChange(false)}
             onChangeText={onPromptChange}
             onFocus={() => onFocusChange(true)}
             placeholder="Or type your request…"
-            placeholderTextColor={palettes.light.placeholder}
+            placeholderTextColor={theme.colors.placeholder}
             style={[inputText(styles.subheadline), styles.field, { color: ink }]}
             testID="ask-landing-field"
             value={prompt}
@@ -195,9 +208,10 @@ export function AskLanding({
         ) : null}
       </Pastel>
 
-      <View style={styles.powered} testID="ask-landing-powered">
-        <TaskSymbol color={withAlpha(secondary, 0.65)} name="sparkles" size={12} />
-        <Text style={[styles.caption, { color: withAlpha(secondary, 0.65) }]}>Powered by Nexdo AI</Text>
+      {/* `nexdoSecondary.opacity(0.65)`: the view's opacity, as the dark secondary is already translucent. */}
+      <View style={[styles.powered, styles.faint]} testID="ask-landing-powered">
+        <TaskSymbol color={secondary} name="sparkles" size={12} />
+        <Text style={[styles.caption, { color: secondary }]}>Powered by Nexdo AI</Text>
       </View>
     </LinearGradient>
   );
@@ -253,10 +267,10 @@ const styles = StyleSheet.create({
   cardDetail: { fontSize: 13, lineHeight: 16 },
 
   // `VStack(alignment: .leading, spacing: 12)`, at least the viewport tall (AskNexdoView.swift:256).
-  // A white base under the translucent gradient: the landing is fixed light (§24) whatever the theme.
-  landing: { flexGrow: 1, gap: 12, backgroundColor: '#FFFFFF' },
+  // The theme's background under the translucent gradient (set in the component).
+  landing: { flexGrow: 1, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12 },
-  close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 255, 255, 0.65)' },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   greetingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   greeting: { gap: 5 },
   orbSlot: { width: 94, alignItems: 'center' },
@@ -271,7 +285,8 @@ const styles = StyleSheet.create({
   cardChevron: { paddingTop: 24 },
   // `.frame(minHeight: 268, maxHeight: .infinity)` since 6f079c0 (AskAILandingView.swift:71; was 300).
   voicePanel: { flexGrow: 1, minHeight: 268, padding: 12, gap: 8, borderRadius: 20, justifyContent: 'center' },
-  voice: { alignItems: 'center', gap: 8 },
+  // `.frame(maxWidth: .infinity, minHeight: 160)` (61788dc).
+  voice: { alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 160 },
   voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   mic: {
     width: 64,
@@ -287,13 +302,14 @@ const styles = StyleSheet.create({
   },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   wave: { width: 4, borderRadius: 2, backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) },
-  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: 28, backgroundColor: '#FFFFFF' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: 28 },
   keyboard: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   // `.lineLimit(1...4)` at a 20pt line.
   field: { flex: 1, maxHeight: 88, paddingVertical: 8 },
   send: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   // `.padding(.top, 6).padding(.bottom, 2)` since 6f079c0 (AskAILandingView.swift:72; was 12 and 12).
   powered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 6, paddingBottom: 2 },
+  faint: { opacity: 0.65 },
 
   orb: {
     width: 64,

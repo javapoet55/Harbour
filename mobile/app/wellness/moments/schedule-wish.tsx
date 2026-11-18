@@ -12,7 +12,7 @@ import { capitalized, momentIcon } from '../../../src/features/moments/domain';
 import { DateField, FormToggle, ZonePicker } from '../../../src/features/moments/form';
 import { findDraft, rememberPlan } from '../../../src/features/moments/handoff';
 import { momentsStore, useMoments } from '../../../src/features/moments/store';
-import { textStyles, useTheme } from '../../../src/theme';
+import { textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 /**
  * `ScheduleWishView` (ios/App/ImportantMomentsView.swift:447-494): the delivery method, the send time
@@ -24,7 +24,7 @@ import { textStyles, useTheme } from '../../../src/theme';
  * time that lapses while the screen is open disables the button on its own
  * (ImportantMomentsView.swift:464, :496).
  */
-export default function ScheduleWishScreen() {
+function ScheduleWishScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams<{ momentId?: string; draftId?: string; channel?: string; recipient?: string }>();
   const [moment] = useState<ImportantMoment | undefined>(() => momentsStore.getState().snapshot?.moments.find((item) => item.id === params.momentId));
@@ -143,3 +143,6 @@ const styles = StyleSheet.create({
   content: { padding: 18, gap: 18, paddingBottom: 60 },
   bold: { fontWeight: '700' },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ScheduleWishScreen);

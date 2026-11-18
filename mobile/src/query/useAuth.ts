@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import { endpoints, isApiError, type Profile } from '../api';
+import { accountExistsConflict, endpoints, isApiError, unknownResetEmail, type Profile, type RegistrationResponse } from '../api';
 import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
 import { resetWellnessGuidesForSignIn } from '../store/wellnessGuides';
@@ -78,13 +78,38 @@ export function useSignIn() {
  * security check runs before this, on the screen (`signupChallenge`), as `SignUpView.create()` does.
  */
 export function useSignUp() {
-  return useMutation<PendingVerification | null, Error, { name: string; email: string; password: string; turnstileToken?: string }>({
+  return useMutation<SignUpResult, Error, { name: string; email: string; password: string; turnstileToken?: string }>({
     mutationFn: async ({ name, email, password, turnstileToken }) => {
-      const response = await endpoints.register(name, email, password, undefined, turnstileToken);
-      if (response.emailVerificationRequired !== true) return null;
-      return { ...(response.verificationProof ? { verificationProof: response.verificationProof } : {}), email: response.email, reason: response.emailSent === false ? 'codeNotSent' : 'codeSent' };
+      let response: RegistrationResponse;
+      try {
+        response = await endpoints.register(name, email, password, undefined, turnstileToken);
+      } catch (error) {
+        // 8592a0a: an existing email is a 409, answered with the "Account already exists" alert.
+        const conflict = accountExistsConflict(error);
+        if (conflict) return { kind: 'accountExists', email, message: conflict.message };
+        throw error;
+      }
+      if (response.emailVerificationRequired !== true) return { kind: 'signedIn' };
+      return { kind: 'verify', pending: { ...(response.verificationProof ? { verificationProof: response.verificationProof } : {}), email: response.email, reason: response.emailSent === false ? 'codeNotSent' : 'codeSent' } };
     },
   });
+}
+
+/**
+ * What registering led to. `accountExists` is the 409 (`catch APIError.server(409, _)`,
+ * RootView.swift:790-791), which Swift answers with the same alert as the blur check, not an error line.
+ */
+export type SignUpResult =
+  | { kind: 'signedIn' }
+  | { kind: 'verify'; pending: PendingVerification }
+  | { kind: 'accountExists'; email: string; message: string };
+
+/**
+ * `AppModel.signupAccountExists` (NexdoApp.swift:197-201). Throws like Swift does: the blur check
+ * swallows the failure and `create()` shows the server text (RootView.swift:759-769, :778-793).
+ */
+export async function accountExists(email: string): Promise<boolean> {
+  return (await endpoints.accountExists(email)).exists;
 }
 
 /** `AppModel.verifyEmail` (NexdoApp.swift:183–187): a correct code starts the session. */
@@ -120,10 +145,24 @@ export function resetFailure(error: unknown, fallback: string): string {
   return message !== '' ? message : fallback;
 }
 
-/** `AppModel.requestPasswordReset` (NexdoApp.swift:192–199). */
+/**
+ * What a reset request led to. `unknownEmail` is the 404 that 60212f3 added (`RESET_ACCOUNT_NOT_FOUND`):
+ * "We don’t have an account with this email address…", shown in red under the fields.
+ */
+export type PasswordResetRequestResult = { kind: 'sent'; message: string } | { kind: 'unknownEmail'; message: string };
+
+/** `AppModel.requestPasswordReset` (NexdoApp.swift:221-228). */
 export function useRequestPasswordReset() {
-  return useMutation<string, Error, { email: string }>({
-    mutationFn: async ({ email }) => (await endpoints.passwordResetRequest(email)).message,
+  return useMutation<PasswordResetRequestResult, Error, { email: string }>({
+    mutationFn: async ({ email }) => {
+      try {
+        return { kind: 'sent', message: (await endpoints.passwordResetRequest(email)).message };
+      } catch (error) {
+        const unknown = unknownResetEmail(error);
+        if (unknown) return { kind: 'unknownEmail', message: unknown.message };
+        throw error;
+      }
+    },
   });
 }
 

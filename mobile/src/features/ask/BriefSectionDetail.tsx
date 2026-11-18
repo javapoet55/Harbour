@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, View, type ImageSourcePropType, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,6 +15,7 @@ import { useMinuteTick } from '../../lib/useMinuteTick';
 import { isConflictCancelled, isStaleWrite, useCompleteTask, useTasks, type ScheduleConflict } from '../../query/useTasks';
 import { useSession } from '../../store/session';
 import { palettes } from '../../theme';
+import { SPOKEN_REPLIES_OFF, useBriefSectionSpeech } from '../../voice/briefSpeech';
 import { PopoverMenu, usePopoverMenu } from '../moments/form';
 import { startedLabel } from '../pomodoro/format';
 import { BriefArtwork, briefColors, briefInk, briefSecondary } from './DailyBrief';
@@ -24,6 +25,8 @@ import { BriefArtwork, briefColors, briefInk, briefSecondary } from './DailyBrie
  * section card. A line that names exactly one open task (`task(for:)`) becomes a task card — complete,
  * open, add a note, (re)schedule, or Call / Message for a task with a contact action — and anything
  * else an insight card. "Need help with this?" goes back to the brief and asks about every line.
+ *
+ * Read aloud speaks the section on the phone (04fa8d8, `BriefSectionSpeech`), not through Ask's voice reply.
  *
  * FIXED LIGHT, as in Swift.
  */
@@ -53,7 +56,20 @@ function confirmConflict(conflict: ScheduleConflict) {
   ]);
 }
 
-export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { title: string; items: string[]; onBack: () => void; onAsk: (query: string) => void; onRead: () => string | null }) {
+export function BriefSectionDetail({
+  title,
+  items,
+  onBack,
+  onAsk,
+  onStopVoiceReply,
+}: {
+  title: string;
+  items: string[];
+  onBack: () => void;
+  onAsk: (query: string) => void;
+  /** `stopVoiceReply` (BriefSectionDetailView.swift:11): Ask's generated reply stops before the phone reads. */
+  onStopVoiceReply: () => void;
+}) {
   const tasks = useTasks().data?.tasks ?? [];
   const complete = useCompleteTask({ onConflict: confirmConflict });
   const busy = complete.isPending;
@@ -62,9 +78,18 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
   const copy = briefDetailCopy(title, briefItemCount(items));
   const anchor = useRef<View>(null);
   const menu = usePopoverMenu(anchor);
-  // Android ahead of iOS: Swift sets Ask's `voiceError`, which lives in the composer this page hides, so
-  // "Read aloud" with OpenAI sharing off did nothing on screen (AskNexdoView.swift:531, :333).
-  const [readError, setReadError] = useState<string | null>(null);
+  const speech = useBriefSectionSpeech();
+  const voiceEnabled = useSession((state) => state.profile?.preference?.voiceEnabled);
+
+  /** `readAloud()` (BriefSectionDetailView.swift:95-102). */
+  const readAloud = () => {
+    if (voiceEnabled === false) {
+      speech.showError(SPOKEN_REPLIES_OFF);
+      return;
+    }
+    onStopVoiceReply();
+    speech.read(items.join('\n\n'));
+  };
 
   return (
     <View style={styles.fill} testID="brief-detail">
@@ -90,7 +115,10 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
         </View>
         <PopoverMenu
           items={[
-            { key: 'read', title: 'Read aloud', onPress: () => setReadError(onRead()), testID: 'brief-detail-read' },
+            // `if speech.isReading { Stop reading } else { Read aloud.disabled(items.isEmpty) }` (:44-50).
+            speech.isReading
+              ? { key: 'stop', title: 'Stop reading', onPress: speech.stop, testID: 'brief-detail-stop' }
+              : { key: 'read', title: 'Read aloud', onPress: readAloud, disabled: items.length === 0, testID: 'brief-detail-read' },
             { key: 'share', title: 'Share briefing', onPress: () => void Share.share({ message: items.join('\n\n') }), testID: 'brief-detail-share' },
           ]}
           menu={menu}
@@ -124,9 +152,10 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
               {failure}
             </Text>
           ) : null}
-          {readError ? (
-            <Text style={[styles.subheadline, { color: briefColors.red }]} testID="brief-detail-read-error">
-              {readError}
+          {/* `if let message = speech.error { ReadAloudError(message:) }` (:67). */}
+          {speech.error ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.subheadline, { color: briefColors.red }]} testID="brief-detail-read-error">
+              {speech.error}
             </Text>
           ) : null}
 

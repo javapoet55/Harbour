@@ -188,15 +188,22 @@ export type ShoppingEmailSettings = {
   consent: true;
   pickupDate?: string;
   pickupStartHour?: number;
+  /** d471768: yyyy-MM-dd for a one-time email, null for weekly (email-domain.ts:9). */
+  sendDate?: string | null;
 };
 export type ShoppingEmailSnapshot = {
   available: boolean;
+  /** d471768 (email-service.ts:18): true on a server that takes `sendDate`. */
+  supportsOneTime?: boolean;
   account: { email: string; status: string } | null;
   schedule:
-    | (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone' | 'pickupDate' | 'pickupStartHour'> & {
+    | (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone' | 'pickupDate' | 'pickupStartHour' | 'sendDate'> & {
         customerPhone: string | null;
         pickupDate?: string | null;
         pickupStartHour?: number | null;
+        sendDate?: string | null;
+        /** The one-time email has been queued (and is not sent again). */
+        oneTimeQueued?: boolean;
         enabled: boolean;
         nextRunAt: string;
         runs: { id: string; dueAt: string; status: string; detail: string | null }[];
@@ -282,8 +289,12 @@ export const shoppingOffersApi = {
 // ---------------------------------------------------------------------------------------------
 // Phase 12 Run F: stores, store brand, photo identification, recommendations
 
-/** `ShoppingStoreSuggestion` (ShoppingViews.swift:633-641; src/server/shopping/stores.ts:52). */
-export type ShoppingStoreSuggestion = { id: string; name: string; address: string; zip: string; website?: string | null; attributions: string[]; distanceKm?: number | null };
+/**
+ * `ShoppingStoreSuggestion` (ShoppingViews.swift:641-650; src/server/shopping/stores.ts:52). `brand` is
+ * new in ce6d20a (src/server/shopping/search-brands.ts): the server's logo for the row, so the finder
+ * draws it without a lookup. Optional, as in Swift: an older server sends none, and the row keeps the cart.
+ */
+export type ShoppingStoreSuggestion = { id: string; name: string; address: string; zip: string; website?: string | null; attributions: string[]; distanceKm?: number | null; brand?: StoreBrandMetadata | null };
 
 /** `StoreBrandMetadata` (StoreBrandLogo.swift:4-7). */
 export type StoreBrandMetadata = { displayName: string; logoUrl?: string | null };

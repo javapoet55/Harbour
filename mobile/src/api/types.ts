@@ -12,7 +12,7 @@
 // MARK: Account
 
 export type ProfilePreferences = {
-  /** d568989: weekday numbers, 0 = Sunday, comma-separated ("1,2,3,4,5"). Optional in Swift; never null on the wire. */
+  /** d568989: weekday numbers, 0 = Sunday, comma-separated ("0,1,2,3,4,5,6" by default). Optional in Swift; never null on the wire. */
   workingDays?: string;
   workStart: string;
   workEnd: string;

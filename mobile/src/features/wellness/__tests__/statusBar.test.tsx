@@ -10,7 +10,7 @@ jest.mock('../../pomodoro/device', () => ({ pomodoroStore: {} }));
 jest.mock('../navigation', () => ({ leaveWellness: jest.fn() }));
 jest.mock('../../../lib/sessionNavigation', () => ({ closePresentedScreens: jest.fn() }));
 jest.mock('../../../store/session', () => ({ useSession: (pick: (state: { profile: null }) => unknown) => pick({ profile: null }) }));
-// The claim on the root layout's `StatusBarOwner` (android-polish.md §45).
+// The claim on the root layout's `StatusBarOwner` (android-polish.md §68).
 const mockClaim = jest.fn(() => () => undefined);
 jest.mock('../../../components/StatusBarOwner', () => ({ claimFixedLight: () => mockClaim() }));
 
@@ -30,9 +30,9 @@ describe('FixedLightStatusBar', () => {
     expect(mockClaim).not.toHaveBeenCalled();
   });
 
-  it('is on Pomodoro too, which Swift keeps light (`.preferredColorScheme(.light)`)', async () => {
+  it('is not on Pomodoro, which follows the theme since ce6d20a', async () => {
     mockFocused.mockReturnValue(true);
     await render(<PomodoroScreen />);
-    expect(mockClaim).toHaveBeenCalledTimes(1);
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 });

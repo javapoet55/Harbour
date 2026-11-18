@@ -50,7 +50,7 @@ afterEach(() => {
   useAppearance.setState({ appearance: 'system' });
 });
 
-/** QA M-02: the status bar follows the app's Appearance, whatever the phone's own theme (§45). */
+/** QA M-02: the status bar follows the app's Appearance, whatever the phone's own theme (§68). */
 describe('StatusBarOwner', () => {
   const cases: [phone: 'light' | 'dark', app: AppAppearance, style: 'light-content' | 'dark-content'][] = [
     // The QA case: phone Light, app Night.
@@ -123,7 +123,7 @@ describe('StatusBarOwner', () => {
   });
 });
 
-/** Ask, Pomodoro, the Calorie Tracker, the module guides and calendar connect keep dark icons while in front. */
+/** Daily Brief, the module guides, the introduction and calendar connect keep dark icons while in front. */
 describe('FixedLightStatusBar', () => {
   it.each([
     ['light', 'night'],

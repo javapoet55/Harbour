@@ -22,6 +22,8 @@ import { tasksQueryOptions } from '../src/query/useTasks';
 import { synchronizeDeviceTimeZone, TIME_ZONE_SYNC_ERROR } from '../src/query/useProfile';
 import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
+import { recordFirstLaunch } from '../src/features/review/reviewPrompt';
+import { useIntroduction } from '../src/store/introduction';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
 import { configureCrashReporting } from '../src/lib/crashReporting';
@@ -89,6 +91,10 @@ export default function RootLayout() {
   useEffect(() => {
     void useLastSignedIn.getState().hydrate();
     void useAppearance.getState().hydrate();
+    // Whether the first-install introduction was seen (RootView.swift:16); app/index.tsx waits for it.
+    void useIntroduction.getState().hydrate();
+    // `AppReviewPromptStore.shared.recordFirstLaunch()` in `NexdoApp.init` (bfa5b73): once, ever.
+    void recordFirstLaunch();
   }, []);
 
   return (
@@ -135,7 +141,7 @@ export function RootNavigator() {
 
   // Release the native splash once the launch is decided (signed in, signed out, or the error screen),
   // one frame late so the screen it reveals has already drawn. `hide()` is a no-op once hidden.
-  // Hiding it also puts the status bar back as it was at launch, so the owner re-applies it (§45).
+  // Hiding it also puts the status bar back as it was at launch, so the owner re-applies it (§68).
   useEffect(() => {
     let cancelReapply: (() => void) | undefined;
     const hide = () => {
@@ -228,7 +234,7 @@ export function RootNavigator() {
   return (
     // The whole app, so a bug report's screenshot is what was on screen when it opened.
     <View collapsable={false} ref={bugReportRoot} style={[styles.root, { backgroundColor: theme.colors.groupedBackground }]}>
-      {/* The only status-bar style setter (§45): the app's Appearance, never the phone's theme. */}
+      {/* The only status-bar style setter (§68): the app's Appearance, never the phone's theme. */}
       <StatusBarOwner scheme={theme.scheme} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.groupedBackground } }}>
         <Stack.Screen name="index" />

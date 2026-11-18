@@ -25,6 +25,7 @@ import {
   displayedMoments,
   displayGroups,
   momentForPlan,
+  needReviewCount,
   needsWishReview,
   planDate,
   planStatusLabel,
@@ -43,7 +44,7 @@ import {
 import { MenuPicker } from '../../../src/features/moments/form';
 import { momentsStore, useMomentList, useMoments } from '../../../src/features/moments/store';
 import { INBOX, routedDestination } from '../../../src/features/moments/useMomentsLifecycle';
-import { brand, linearGradientStops, textStyles, useTheme } from '../../../src/theme';
+import { brand, linearGradientStops, textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 const ADD_MOMENT_BLUE = '#1877F2';
@@ -69,8 +70,10 @@ function manageHref(group: MomentDisplayGroup) {
  * `routed` is `MomentRoutedView` (`:574-594`): a notification opened this screen, so it carries a
  * leading Close and pushes the moment's detail once.
  */
-export default function ImportantMomentsScreen() {
+function ImportantMomentsScreen() {
   const theme = useTheme();
+  // Toolbar items keep the app's `link`, readable in dark on Android (§24 bug 4), not the Wellness tint.
+  const toolbarLink = useTheme({ toolbar: true }).colors.link;
   const { routed, plan: routedPlan } = useLocalSearchParams<{ routed?: string; plan?: string }>();
   const moments = useMomentList();
   const error = useMoments((state) => state.error);
@@ -113,7 +116,8 @@ export default function ImportantMomentsScreen() {
   const enabled = displayed.filter((moment) => moment.enabled);
   const upcomingCount = displayGroups(enabled).length;
   const scheduled = displayed.filter((moment) => moment.enabled && upcomingDelivery(moment) !== undefined).length;
-  const review = displayed.filter(needsWishReview).length;
+  // The same count as Manage Moments' Need Review tab (§24 bug 3).
+  const review = needReviewCount(displayed);
   const ready = displayed.filter(readyToSchedule).length;
 
   return (
@@ -127,7 +131,7 @@ export default function ImportantMomentsScreen() {
                 headerLeft: () => (
                   <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={8} testID="moments-close">
                     <GlassCapsule>
-                      <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Close</Text>
+                      <Text style={{ fontSize: 17, lineHeight: 22, color: toolbarLink }}>Close</Text>
                     </GlassCapsule>
                   </Pressable>
                 ),
@@ -136,7 +140,7 @@ export default function ImportantMomentsScreen() {
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/wellness/moments/settings')} hitSlop={6} testID="moments-settings">
               <GlassCircle>
-                <Ionicons name="settings-outline" size={22} color={theme.colors.link} />
+                <Ionicons name="settings-outline" size={22} color={toolbarLink} />
               </GlassCircle>
             </Pressable>
           ),
@@ -453,3 +457,6 @@ const styles = StyleSheet.create({
   // `.frame(minHeight: 52)` inside `.borderedProminent`, which adds ~6pt above and below: 64 in all.
   addButton: { minHeight: 64, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ImportantMomentsScreen);

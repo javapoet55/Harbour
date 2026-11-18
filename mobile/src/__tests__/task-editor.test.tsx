@@ -1,16 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Keyboard } from 'react-native';
 
 import { ApiError } from '../api/client';
 import { resetRevisions } from '../query/taskRevision';
 import { useSession } from '../store/session';
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
   useLocalSearchParams: () => mockParams(),
+  // The screen's header items render in place, so the toolbar microphone can be found and pressed.
+  Stack: { Screen: ({ options }: { options?: { headerRight?: () => React.ReactNode } }) => options?.headerRight?.() ?? null },
 }));
 
 const mockCreateTask = jest.fn();
@@ -74,7 +77,9 @@ describe('Task creation editor', () => {
 
     expect(screen.getByText('TASK NAME')).toBeTruthy();
     expect(screen.getByText('NOTES')).toBeTruthy();
-    expect(screen.getByText('PROJECT')).toBeTruthy();
+    // 2991151: FOLDER (RootView.swift:2283).
+    expect(screen.getByText('FOLDER')).toBeTruthy();
+    expect(screen.queryByText('PROJECT')).toBeNull();
     expect(screen.getByText('DATE')).toBeTruthy();
     expect(screen.getByText('TIME ESTIMATE')).toBeTruthy();
     // Swift's creation form has no priority, energy, tags or recurrence.
@@ -161,14 +166,15 @@ describe('Task creation editor', () => {
     expect(body.startAt).toBe('2026-09-17T03:30:00.000Z');
   });
 
-  it('steps the custom estimate by 5, bounded to 5–480', async () => {
+  it('steps the custom estimate by 5, bounded to 5–480, in the Custom estimate sheet (9e82c95)', async () => {
     await renderEditor();
+    await fireEvent.press(screen.getByTestId('duration-custom'));
 
     await fireEvent.press(screen.getByTestId('duration-increase'));
-    await waitFor(() => expect(screen.getByText('35 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('35 minutes')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('duration-decrease'));
-    await waitFor(() => expect(screen.getByText('30 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('30 minutes')).toBeTruthy());
   });
 
   it('closes on success', async () => {
@@ -225,5 +231,43 @@ describe('Task creation editor', () => {
       // Only the conflict prompt, never a failure alert on top of it.
       expect((Alert.alert as unknown as jest.Mock).mock.calls).toHaveLength(1);
     });
+  });
+});
+
+/** 61788dc / fb29e95 (RootView.swift:2353-2362; capture `task-editor-v4-from-today`): the toolbar microphone. */
+describe('Create New Task: Add task by voice', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
+    mockTasks.mockResolvedValue({ tasks: [], timeZone: ZONE });
+    mockProjects.mockResolvedValue({ projects: [] });
+  });
+
+  it('opens a fresh Add by Voice over the editor, with the keyboard down', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    await renderEditor();
+    const mic = screen.getByTestId('task-editor-voice');
+    expect(mic.props.accessibilityLabel).toBe('Add task by voice');
+    await fireEvent.press(mic);
+    expect(dismiss).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/task/voice-capture');
+    await fireEvent.press(mic);
+    expect(mockPush).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens voice in the folder chosen in the form (08a64da)', async () => {
+    mockParams.mockReturnValue({ projectId: 'p1' });
+    await renderEditor();
+    await fireEvent.press(screen.getByTestId('task-editor-voice'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/task/voice-capture', params: { projectId: 'p1' } });
+    mockParams.mockReturnValue({});
+  });
+
+  it('is disabled while the task is being created', async () => {
+    mockCreateTask.mockReturnValue(new Promise(() => undefined));
+    await renderEditor();
+    await fireEvent.changeText(screen.getByTestId('task-title'), 'Read a book');
+    await fireEvent.press(screen.getByTestId('create-task'));
+    await waitFor(() => expect(screen.getByTestId('task-editor-voice').props.accessibilityState.disabled).toBe(true));
   });
 });

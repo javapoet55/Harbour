@@ -50,7 +50,15 @@ export type ToolExecutorOptions = {
   uuid: () => string;
   /** Injected so the contact lookup can be faked in tests. */
   resolve?: typeof resolveContacts;
+  /**
+   * `VoiceToolExecutor(projectID:)` (VoiceToolExecutor.swift:11-13, 08a64da): the folder Create New Task had chosen
+   * when its microphone opened this session. Sent beside the arguments on `create_task` / `create_reminder` only.
+   */
+  projectId?: string;
 };
+
+/** NexdoApp.swift:613 — the two tools the server lets a folder ride on (src/app/api/realtime/tool/route.ts:18). */
+const FOLDER_TOOLS = ['create_task', 'create_reminder'];
 
 export class VoiceToolExecutor implements VoiceToolExecuting {
   private readonly options: ToolExecutorOptions;
@@ -103,10 +111,11 @@ export class VoiceToolExecutor implements VoiceToolExecuting {
 
     if (name === 'prepare_call' || name === 'prepare_email') return this.prepareContact(name, args);
 
-    // `AppModel.executeVoiceTool` (NexdoApp.swift:481-493).
+    // `AppModel.executeVoiceTool` (NexdoApp.swift:609-630).
+    const folder = this.options.projectId && FOLDER_TOOLS.includes(name) ? { projectId: this.options.projectId } : {};
     const response = await getApi().request<Record<string, unknown>>(TOOL_PATH, {
       method: 'POST',
-      body: { consent: true, scope: this.options.scope, sessionId, callId, name, arguments: args },
+      body: { consent: true, scope: this.options.scope, sessionId, callId, name, ...folder, arguments: args },
       timeoutMs: 30_000,
     });
 

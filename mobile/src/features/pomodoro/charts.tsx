@@ -5,6 +5,7 @@ import { AccessibilityInfo, Animated, Pressable, StyleSheet, View } from 'react-
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import type { PomodoroBucket, PomodoroPeriod } from './analytics';
+import { usePomodoroColors } from './colors';
 import { axisLabel, axisMinutes, chartDomain, dashboardTime, selectedBucket, tickIndices } from './format';
 
 /**
@@ -44,12 +45,13 @@ export function FocusChart({
   const ticks = new Set(tickIndices(buckets.length, period));
   const selected = selectedBucket(buckets, picked);
   const labels = axisMinutes(domain).reverse();
+  const colors = usePomodoroColors();
   return (
     <View style={styles.chartBlock} testID={testID}>
       <View style={styles.chart}>
         <View style={styles.yAxis}>
           {labels.map((minutes) => (
-            <Text key={minutes} style={[styles.axisText, styles.yLabel, { bottom: `${(minutes / domain) * 100}%` }]}>{`${minutes}m`}</Text>
+            <Text key={minutes} style={[styles.axisText, { color: colors.axis }, styles.yLabel, { bottom: `${(minutes / domain) * 100}%` }]}>{`${minutes}m`}</Text>
           ))}
         </View>
         <View style={styles.plot}>
@@ -92,14 +94,15 @@ export function FocusChart({
       </View>
       <View style={styles.xAxis}>
         {buckets.map((bucket, index) => (
-          <Text key={bucket.start} numberOfLines={1} style={[styles.axisText, styles.xLabel]}>
+          <Text key={bucket.start} numberOfLines={1} style={[styles.axisText, { color: colors.axis }, styles.xLabel]}>
             {ticks.has(index) ? axisLabel(bucket.start, period, zone) : ''}
           </Text>
         ))}
       </View>
       {breaks ? (
         <View style={styles.legend}>
-          <Legend color="#5856D6" title="Focus" />
+          {/* ce6d20a: the Focus legend is `wellnessAccent`. */}
+          <Legend color={colors.accent} title="Focus" />
           <Legend color="#32ADE6" title="Break" />
         </View>
       ) : null}
@@ -285,7 +288,7 @@ const styles = StyleSheet.create({
   // 24 wide plus the 6 gap is the x-axis's 30 inset.
   yAxis: { width: 24 },
   yLabel: { position: 'absolute', right: 0, marginBottom: -6.5 },
-  axisText: { fontSize: 11, lineHeight: 13, color: '#575C80' },
+  axisText: { fontSize: 11, lineHeight: 13 },
   plot: { flex: 1 },
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1 },
   bars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end' },

@@ -64,7 +64,7 @@ export function ProjectCard({ project, onPress }: { project: NexdoProject; onPre
       accessible
       accessibilityRole="button"
       accessibilityLabel={`${project.name}. Open: ${open}   Done: ${project.completedTaskCount}`}
-      accessibilityHint="Opens project tasks"
+      accessibilityHint="Opens folder tasks"
       onPress={onPress}
       testID={`project-card-${project.id}`}
       style={[styles.card, surface]}

@@ -96,7 +96,8 @@ export function ChangePasswordScreen({ onBack, onForgotPassword }: { onBack: () 
         {/* 4185501 (ProfileView.swift:192-195): the reset sheet, for the signed-in account's email. */}
         <FormSection disabled={saving}>
           <FormRow last>
-            <FormButton onPress={onForgotPassword} testID="change-password-forgot" title="Forgot password?" />
+            {/* Default-tinted, so it takes My Page's `nexdoActionForeground` (61788dc): white in dark. */}
+            <FormButton onPress={onForgotPassword} testID="change-password-forgot" tint={theme.colors.actionForeground} title="Forgot password?" />
           </FormRow>
         </FormSection>
         {confirmation !== '' && next !== confirmation ? (

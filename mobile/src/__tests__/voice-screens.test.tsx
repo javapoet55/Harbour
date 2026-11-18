@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Linking } from 'react-native';
 
 import type { DoNowRecommendation, NexdoTask, ProtectedTimeProposal } from '../api';
@@ -11,9 +11,10 @@ import { useSession } from '../store/session';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams(),
   Stack: { Screen: () => null },
 }));
 
@@ -46,6 +47,7 @@ jest.mock('../voice/useVoiceSession', () => ({
 }));
 
 import Today from '../../app/(tabs)/(today)/today/index';
+import VoiceCapture from '../../app/task/voice-capture';
 import { AddTaskByVoiceView } from '../components/AddTaskByVoiceView';
 
 const ZONE = 'America/Los_Angeles';
@@ -56,6 +58,8 @@ function voiceSession(overrides: Record<string, unknown> = {}) {
     state: { phase: 'listening', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] },
     starting: false,
     startupError: null,
+    microphoneDenied: false,
+    start: jest.fn(),
     toggleMute: jest.fn(),
     finish: jest.fn(),
     close: jest.fn(),
@@ -158,11 +162,11 @@ describe('the voice screen', () => {
   it('asks for food consent with Swift’s copy', async () => {
     useConsent.setState({ ai: false, voice: false });
     await show(<AddTaskByVoiceView askMode foodContext={{ original: { name: 'A' }, alternative: { name: 'B' } }} onClose={jest.fn()} />);
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-    expect((Alert.alert as jest.Mock).mock.calls[0].slice(0, 2)).toEqual([
-      'Ask about food by voice?',
-      'Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list.',
-    ]);
+    expect(await screen.findByText('Ask about food by voice?')).toBeTruthy();
+    expect(
+      screen.getByText('Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list.'),
+    ).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   /**
@@ -263,52 +267,118 @@ describe('the voice screen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  /** The consent alert (AddTaskByVoiceView.swift:87-91). */
-  it('asks for consent before starting, with Swift’s copy, and does not start until it is given', async () => {
+  /**
+   * 4fa8e21 `voice.onClose = nil` (AddTaskByVoiceView.swift:263-271): the session reports its close a tick after
+   * Close or Done already dismissed. SwiftUI's `dismiss()` is idempotent; `router.back()` is not, so the second
+   * call would pop the screen underneath (Create New Task, Today).
+   */
+  it('dismisses once when the session reports its close after Close', async () => {
+    await show(<AddTaskByVoiceView />);
+    const { onClose } = mockUseVoiceSession.mock.lastCall?.[0] as { onClose: () => void };
+
+    fireEvent.press(screen.getByTestId('voice-close'));
+    onClose();
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismisses once when Done on an idle screen also closes the session', async () => {
+    const session = voiceSession({ state: { phase: 'idle', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] } });
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    const { onClose } = mockUseVoiceSession.mock.lastCall?.[0] as { onClose: () => void };
+    session.finish.mockImplementation(() => onClose());
+
+    fireEvent.press(screen.getByTestId('voice-done'));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  /** 4fa8e21: the consent alert became an inline card (AddTaskByVoiceView.swift:143-149, :304-324). */
+  it('asks for consent on the screen, with Swift’s copy, and does not start until it is given', async () => {
     useConsent.setState({ ai: false, voice: false });
+    mockUseVoiceSession.mockReturnValue(voiceSession({ state: { phase: 'idle', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] } }));
 
     await show(<AddTaskByVoiceView />);
 
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls[0] as [string, string, { text: string; onPress?: () => void }[]];
-    expect(title).toBe('Use voice to manage tasks?');
-    expect(body).toMatch(/Your voice and relevant task, calendar, and recommendation details are shared with OpenAI/);
-    expect(buttons.map((button) => button.text)).toEqual(['Not now', 'Allow and start']);
+    expect(screen.getByTestId('voice-consent')).toBeTruthy();
+    expect(screen.getByText('Use voice to manage tasks?')).toBeTruthy();
+    expect(screen.getByText(/Your voice and relevant task, calendar, and recommendation details are shared with OpenAI/)).toBeTruthy();
+    expect(screen.getByTestId('voice-consent-allow')).toHaveTextContent('Allow and start');
+    expect(screen.getByTestId('voice-consent-not-now')).toHaveTextContent('Not now');
+    // The card replaces Start listening (`if needsConsent && isVisible { consentCard } else if …`).
+    expect(screen.queryByTestId('voice-start-listening')).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
     expect(mockUseVoiceSession).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
 
-    buttons[1].onPress?.();
-    await waitFor(() => expect(useConsent.getState()).toMatchObject({ ai: true, voice: true }));
+    await fireEvent.press(screen.getByTestId('voice-consent-allow'));
+    expect(useConsent.getState()).toMatchObject({ ai: true, voice: true });
+    expect(mockUseVoiceSession).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
+    expect(screen.queryByTestId('voice-consent')).toBeNull();
   });
 
-  it('uses the calendar title for the consent alert in calendar mode', async () => {
+  it('uses the calendar title for the consent card in calendar mode', async () => {
     useConsent.setState({ ai: false, voice: false });
 
     await show(<AddTaskByVoiceView calendarOnly />);
 
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-    expect((Alert.alert as jest.Mock).mock.calls[0][0]).toBe('Use voice to add calendar events?');
+    expect(screen.getByText('Use voice to add calendar events?')).toBeTruthy();
   });
 
   it('"Not now" dismisses without starting', async () => {
     useConsent.setState({ ai: false, voice: false });
     await show(<AddTaskByVoiceView />);
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as { text: string; onPress?: () => void }[];
 
-    buttons[0].onPress?.();
+    await fireEvent.press(screen.getByTestId('voice-consent-not-now'));
 
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockBack).toHaveBeenCalledTimes(1);
     expect(useConsent.getState().ai).toBe(false);
+    expect(mockUseVoiceSession).not.toHaveBeenCalledWith(expect.objectContaining({ enabled: true }));
+  });
+
+  it('shows the card again if consent is withdrawn while the screen is open', async () => {
+    await show(<AddTaskByVoiceView />);
+    expect(screen.queryByTestId('voice-consent')).toBeNull();
+
+    await act(async () => useConsent.setState({ ai: false }));
+
+    expect(screen.getByTestId('voice-consent')).toBeTruthy();
+    expect(mockUseVoiceSession).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
   });
 
   it('does not ask again when consent is already held', async () => {
     await show(<AddTaskByVoiceView />);
     await waitFor(() => expect(mockUseVoiceSession).toHaveBeenCalledWith(expect.objectContaining({ enabled: true })));
+    expect(screen.queryByTestId('voice-consent')).toBeNull();
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
 
 /** Sections 7 and 8 of `TodayView.body` (ios/App/RootView.swift:1095-1126). */
+/** 08a64da: Create New Task's microphone opens voice in the folder chosen in the form (RootView.swift:2333). */
+describe('voice in a folder (Phase 15)', () => {
+  beforeEach(() => {
+    mockUseVoiceSession.mockReturnValue(voiceSession());
+    useConsent.getState().setConsent({ ai: true, voice: true });
+    useSession.setState({ status: 'signedIn', profile: PROFILE });
+  });
+
+  it('hands the folder from the route to the session', async () => {
+    mockParams.mockReturnValue({ projectId: 'folder-1' });
+    await show(<VoiceCapture />);
+    expect(mockUseVoiceSession).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'general', projectId: 'folder-1' }));
+  });
+
+  it('opens without a folder from everywhere else', async () => {
+    mockParams.mockReturnValue({});
+    await show(<VoiceCapture />);
+    expect(mockUseVoiceSession.mock.lastCall?.[0].projectId).toBeUndefined();
+
+    await show(<AddTaskByVoiceView askMode />);
+    expect(mockUseVoiceSession.mock.lastCall?.[0].projectId).toBeUndefined();
+  });
+});
+
 describe('the last two Today sections', () => {
   const PROPOSAL: ProtectedTimeProposal = {
     taskId: 't1',
@@ -487,5 +557,52 @@ describe('the last two Today sections', () => {
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith('Unable to complete request', 'Your tasks changed. Refresh Tasks and try again.'),
     );
+  });
+});
+
+/**
+ * dc6445c (AddTaskByVoiceView.swift:105-112): **Start listening** on an idle screen with nothing wrong — not while
+ * starting, not after an error, not with the microphone refused, and never over a live session.
+ */
+describe('Start listening', () => {
+  const idle = (overrides: Record<string, unknown> = {}) =>
+    voiceSession({ state: { phase: 'idle', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] }, ...overrides });
+
+  it('starts the session again', async () => {
+    const session = idle();
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    await fireEvent.press(screen.getByTestId('voice-start-listening'));
+    expect(session.start).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Start listening')).toBeTruthy();
+  });
+
+  it.each([
+    ['while listening', voiceSession()],
+    ['while starting', idle({ starting: true })],
+    ['after a startup error', idle({ startupError: 'Voice setup was interrupted. Try again to start listening.' })],
+    ['with the microphone refused', idle({ microphoneDenied: true, startupError: 'Microphone access is off.' })],
+  ])('is not offered %s', async (_, session) => {
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    expect(screen.queryByTestId('voice-start-listening')).toBeNull();
+  });
+
+  it('shows the interrupted setup in red', async () => {
+    mockUseVoiceSession.mockReturnValue(idle({ startupError: 'Voice setup was interrupted. Try again to start listening.' }));
+    await show(<AddTaskByVoiceView />);
+    expect(screen.getByTestId('voice-error')).toHaveTextContent('Voice setup was interrupted. Try again to start listening.');
+  });
+
+  // 4fa8e21: without consent the card takes Start listening’s place, so there is nothing to start (`:143-149`).
+  it('offers the consent card, not Start listening, when consent was never given', async () => {
+    useConsent.setState({ ai: false, voice: false });
+    const session = idle();
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    expect(screen.getByTestId('voice-consent')).toBeTruthy();
+    expect(screen.queryByTestId('voice-start-listening')).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(session.start).not.toHaveBeenCalled();
   });
 });

@@ -121,12 +121,12 @@ describe('projectResults', () => {
 /** `CalendarSearch.matches` (CalendarDates.swift:4-7). */
 describe('searchMatches', () => {
   it('matches everything for an empty or space-only query', () => {
-    expect(searchMatches('No project', '')).toBe(true);
-    expect(searchMatches('No project', '   ')).toBe(true);
+    expect(searchMatches('No Named Folder', '')).toBe(true);
+    expect(searchMatches('No Named Folder', '   ')).toBe(true);
   });
 
   it('matches a substring case-insensitively', () => {
-    expect(searchMatches('No project', 'PROJ')).toBe(true);
-    expect(searchMatches('No project', 'zzz')).toBe(false);
+    expect(searchMatches('No Named Folder', 'FOLD')).toBe(true);
+    expect(searchMatches('No Named Folder', 'zzz')).toBe(false);
   });
 });

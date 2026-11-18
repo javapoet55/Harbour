@@ -6,12 +6,11 @@ import { create } from 'zustand';
 import type { ColorScheme } from '../theme/colors';
 
 /**
- * The ONE place that sets the status-bar style (docs/android-polish.md §45, QA M-02).
+ * The ONE place that sets the status-bar style (docs/android-polish.md §68, QA M-02).
  *
  * The app's Appearance (Day, Night or System) decides it, never the phone's own theme: Night gets
- * light icons and Day dark ones. A fixed-light screen in front (the Ask landing and Daily Brief, Pomodoro,
- * the Calorie Tracker, the module guides, calendar connect) claims dark icons with `FixedLightStatusBar`
- * while it is focused.
+ * light icons and Day dark ones. A fixed-light screen in front (Daily Brief, the module guides, the
+ * introduction, calendar connect) claims dark icons with `FixedLightStatusBar` while it is focused.
  *
  * It sets the style imperatively and AGAIN whenever something native may have put it back. With the
  * phone in Light, every native reset lands on dark icons — the splash screen's removal restores the

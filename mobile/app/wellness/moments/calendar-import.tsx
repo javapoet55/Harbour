@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { calendarCandidates, calendarMomentInput, deviceCalendars, type CalendarCandidate, type CalendarChoice } from '../../../src/features/moments/device';
 import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../src/features/moments/form';
+import { withWellnessTint } from '../../../src/theme';
 
 /**
  * `MomentCalendarImportView` (ios/App/MomentEditor.swift:288-310). Reads the DEVICE calendar the
@@ -11,7 +12,7 @@ import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from
  * 100 — and opens each candidate in the editor for review. Nothing is read until "Allow calendar
  * access" is tapped, and nothing leaves the phone that the person does not save.
  */
-export default function CalendarImportScreen() {
+function CalendarImportScreen() {
   const [calendars, setCalendars] = useState<CalendarChoice[]>([]);
   const [candidates, setCandidates] = useState<CalendarCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -81,3 +82,6 @@ export default function CalendarImportScreen() {
 }
 
 const styles = StyleSheet.create({ fill: { flex: 1 } });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(CalendarImportScreen);

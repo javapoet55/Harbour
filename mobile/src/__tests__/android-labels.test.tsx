@@ -15,6 +15,7 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
   useLocalSearchParams: () => ({}),
   useNavigation: () => ({}),
+  Stack: { Screen: () => null },
 }));
 
 jest.mock('expo-crypto', () => ({
@@ -120,7 +121,7 @@ describe('New Task on Android', () => {
 
   it('draws every icon label in the shared label style', async () => {
     await wrap(<NewTask />);
-    for (const text of ['TASK NAME', 'NOTES', 'PROJECT', 'DATE', 'TIME ESTIMATE']) {
+    for (const text of ['TASK NAME', 'NOTES', 'FOLDER', 'DATE', 'TIME ESTIMATE']) {
       expect(textStyle(text)).toMatchObject(label);
     }
   });
@@ -212,9 +213,9 @@ describe('the shared label elsewhere on Android', () => {
     expect(screen.getByText('Item Image')).toBeTruthy();
   });
 
-  it('is the project editor section header, over a form group', async () => {
+  it('is the folder editor section header, over a form group', async () => {
     await render(<ProjectEditorForm name="" color="#8875ff" onNameChange={jest.fn()} onColorChange={jest.fn()} saving={false} error={null} onRetry={jest.fn()} />);
-    expect(textStyle('Project name')).toMatchObject({ ...label, marginBottom: 8 });
+    expect(textStyle('Folder name')).toMatchObject({ ...label, marginBottom: 8 });
     expect(StyleSheet.flatten(screen.getAllByTestId('project-section')[0].props.style)).toMatchObject({ backgroundColor: dark.fieldSurface, borderWidth: 1, borderColor: dark.fieldBorder });
   });
 });
