@@ -2988,3 +2988,30 @@ caption "Folder" (`app/task/[id].tsx`).
   form".
 - **Phone check:** open a folder → Add task → tap the mic and say "Add review estimates tomorrow at 10". Close
   voice and the editor. The task is in that folder, not in No Named Folder.
+
+### 71.3 Add by Voice: consent on the screen, and one dismissal (§25 row 7; 4fa8e21)
+
+`src/components/AddTaskByVoiceView.tsx`, `src/voice/useVoiceSession.ts`.
+
+- **The consent alert is now Swift's inline card** (`AddTaskByVoiceView.swift:304-324`): the same title per mode
+  ("Use voice to manage tasks?", "Use voice to add calendar events?", "Ask about food by voice?"), the same body,
+  a filled **Allow and start** and a plain **Not now**. It takes Start listening's place while consent is
+  missing. The card is a light ink wash (5%) at 18 radius where Swift uses `.thinMaterial`, which RN has no
+  equivalent for.
+- **Consent is read live** (`needsConsent`, `:111`). Withdrawing AI or voice consent while the screen is open closes
+  the session (as before) and brings the card back, as Swift does.
+- **ANDROID-ONLY FIX, the reason for this row on Android.** The session reports its close a tick after the
+  teardown (`closeAfterReleasingAudio` → `onClose`), so **Close**, **Done** on an idle screen and leaving the screen
+  each called `router.back()` twice (the tests show both calls). The second would pop the screen underneath, e.g. Create
+  New Task or Today; not yet seen on a phone.
+  Swift clears `voice.onClose` before closing (`:267`), and SwiftUI's `dismiss()` is idempotent anyway. RN now
+  ignores the session's close after unmount, and the screen dismisses at most once.
+- **Not ported, no Android equivalent:** the Speaker button's disabled state (RN has no Speaker button) and moving the
+  AVAudioSession interruption and route notifications onto the main queue (no AVAudioSession).
+- Startup still begins when consent is given or the screen opens with it, and again from Start listening or Try
+  again. The owner re-check after each await was already there (`unmounted`, the executor's owner check).
+- Tests: `voice-screens.test.tsx` (consent card in all three modes, Not now, withdrawn consent, the two
+  dismiss-once cases, the card replacing Start listening), `useVoiceSession.test.tsx` "close after unmount".
+- **Phone check:** turn off OpenAI sharing in Account, then open Tasks → Add by Voice. The card shows on the
+  screen, not as a dialog. Not now goes back once, to Tasks. Turn sharing on, open Create New Task → mic → Close.
+  You are back on Create New Task, not Tasks.

@@ -257,7 +257,7 @@ describe('useVoiceSession folder (Phase 15)', () => {
     );
     expect(executor.mock.calls[0][0]).toMatchObject({ projectId: 'folder-1', scope: 'general' });
     // Unmount before startup reaches the credential request, so nothing leaks into the next test.
-    view.unmount();
+    await view.unmount();
 
     executor.mockClear();
     const plain = await render(
@@ -266,7 +266,45 @@ describe('useVoiceSession folder (Phase 15)', () => {
       </QueryClientProvider>,
     );
     expect(executor.mock.calls[0][0].projectId).toBeUndefined();
-    plain.unmount();
+    await plain.unmount();
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+    mockRequest.mockClear();
+  });
+});
+
+/**
+ * 4fa8e21 `voice.onClose = nil` before `voice.close()` (AddTaskByVoiceView.swift:263-271): the session's close
+ * lands a tick after teardown, and must not dismiss whatever screen is showing by then.
+ */
+describe('useVoiceSession close after unmount (Phase 15)', () => {
+  it('reports a close while mounted, and none once the screen has gone', async () => {
+    const onClose = jest.fn();
+    function CloseProbe() {
+      useVoiceSession({ scope: 'general', enabled: true, onClose });
+      return null;
+    }
+    const before = mockConversations.length;
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CloseProbe />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // The one this render built (the newest), whatever an earlier test left behind.
+    expect(mockConversations.length).toBeGreaterThan(before);
+    const conversation = mockConversations[mockConversations.length - 1];
+
+    conversation.options.onClose?.();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await view.unmount();
+    conversation.options.onClose?.();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       for (let step = 0; step < 6; step += 1) await Promise.resolve();
     });

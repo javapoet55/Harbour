@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '../store/session';
@@ -53,54 +53,34 @@ const EXAMPLES = {
   food: ['“Which item has more protein?”', '“What allergens are declared?”', '“How can I use this in a recipe?”'],
 } as const;
 
-/** The food consent alert (`:172-175`). */
+/** The food consent card's body (`:308-310`). */
 const FOOD_CONSENT_BODY =
   'Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list.';
 
-/** The consent alert (`:87-91`). */
+/** The consent card's body (`:308-310`). */
 const CONSENT_BODY =
   'Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.';
 
 export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, foodContext, onClose, projectId }: AddTaskByVoiceViewProps) {
-  const close = onClose ?? (() => router.back());
-  const closeRef = useRef(close);
-  useEffect(() => {
-    closeRef.current = close;
-  });
+  /**
+   * `dismiss()`, at most once. Close and Done dismiss, and the session's own close (`voice.onClose`) dismisses a
+   * tick later. SwiftUI ignores the second call; `router.back()` would pop the screen underneath (4fa8e21).
+   */
+  const dismissed = useRef(false);
+  const close = () => {
+    if (dismissed.current) return;
+    dismissed.current = true;
+    (onClose ?? (() => router.back()))();
+  };
   const theme = useTheme();
   const profile = useSession((state) => state.profile);
-  // `@State private var consent` (`:11`): the alert is shown until it is answered.
-  const [allowed, setAllowed] = useState(() => {
-    const consent = useConsent.getState();
-    return consent.ai && consent.voice;
-  });
-  const [asked, setAsked] = useState(false);
+  // `needsConsent` (`:111`, 4fa8e21), read live: withdrawing consent closes the session and brings the card back.
+  const consent = useConsent();
+  const needsConsent = !consent.ai || !consent.voice;
 
   const scope: VoiceScope = foodContext ? 'food' : calendarOnly ? 'calendar' : 'general';
-  const voice = useVoiceSession({ scope, enabled: allowed, onClose: close, foodContext, projectId });
-
-  /**
-   * `.task { … if model.aiConsent && model.voiceConsent { await start() } else { consent = true } }`
-   * (`:92-101`). `.task` runs after the view appears, so the alert is raised on a timer rather than
-   * during the commit.
-   */
-  useEffect(() => {
-    if (allowed || asked) return;
-    const timer = setTimeout(() => {
-      setAsked(true);
-      Alert.alert(foodContext ? 'Ask about food by voice?' : calendarOnly ? 'Use voice to add calendar events?' : 'Use voice to manage tasks?', foodContext ? FOOD_CONSENT_BODY : CONSENT_BODY, [
-        { text: 'Not now', style: 'cancel', onPress: () => closeRef.current() },
-        {
-          text: 'Allow and start',
-          onPress: () => {
-            useConsent.getState().setConsent({ ai: true, voice: true });
-            setAllowed(true);
-          },
-        },
-      ]);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [allowed, asked, calendarOnly, foodContext]);
+  // `.task(id: startupRequest) { … if !needsConsent { await start() } }` (`:227-236`): no session without consent.
+  const voice = useVoiceSession({ scope, enabled: !needsConsent, onClose: close, foodContext, projectId });
 
   const status = voice.starting ? 'Connecting…' : foodContext && voice.state.phase === 'toolExecution' ? 'Looking up food information…' : voiceStatus(voice.state);
   const error = voice.startupError ?? voice.state.error;
@@ -187,16 +167,36 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, food
           </Pressable>
         ) : null}
 
-        {/* dc6445c (AddTaskByVoiceView.swift:105-112): an idle screen with no live microphone and nothing wrong
-            offers to start; without consent it asks again first (`else { consent = true }`). */}
-        {voice.state.phase === 'idle' && !voice.starting && !voice.microphoneDenied && voice.startupError === null ? (
+        {/* 4fa8e21 `consentCard` (AddTaskByVoiceView.swift:143-144, :304-324): the consent question lives on the
+            screen, in place of Start listening, until it is answered. */}
+        {needsConsent ? (
+          <View style={[styles.consent, { backgroundColor: withAlpha(theme.colors.ink, 0.05) }]} testID="voice-consent">
+            <Text accessibilityRole="header" style={[styles.headline, { color: theme.colors.ink }]}>
+              {foodContext ? 'Ask about food by voice?' : calendarOnly ? 'Use voice to add calendar events?' : 'Use voice to manage tasks?'}
+            </Text>
+            <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{foodContext ? FOOD_CONSENT_BODY : CONSENT_BODY}</Text>
+            <Pressable
+              accessibilityLabel="Allow and start"
+              accessibilityRole="button"
+              onPress={() => useConsent.getState().setConsent({ ai: true, voice: true })}
+              style={[styles.openSettings, styles.leading, { backgroundColor: theme.colors.tint }]}
+              testID="voice-consent-allow"
+            >
+              <Text style={[theme.typography.body, { color: theme.colors.onTint }]}>Allow and start</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Not now" accessibilityRole="button" hitSlop={8} onPress={close} style={styles.notNow} testID="voice-consent-not-now">
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Not now</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* dc6445c (AddTaskByVoiceView.swift:145-149): an idle screen with no live microphone and nothing wrong
+            offers to start. */}
+        {!needsConsent && voice.state.phase === 'idle' && !voice.starting && !voice.microphoneDenied && voice.startupError === null ? (
           <Pressable
             accessibilityLabel="Start listening"
             accessibilityRole="button"
-            onPress={() => {
-              if (allowed) voice.start();
-              else setAsked(false);
-            }}
+            onPress={() => voice.start()}
             style={[styles.openSettings, { backgroundColor: theme.colors.tint }]}
             testID="voice-start-listening"
           >
@@ -353,6 +353,10 @@ function scheduleLabel(startAt: string, timeZone: string | undefined): string {
 const styles = StyleSheet.create({
   // `.borderedProminent`: a filled capsule in the tint; 44 tall for the touch target.
   openSettings: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22 },
+  // `consentCard`: `.padding(16)`, leading, 12 apart, on a rounded 18 material.
+  consent: { gap: 12, padding: 16, borderRadius: 18 },
+  leading: { alignSelf: 'flex-start' },
+  notNow: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
   fill: { flex: 1 },
   grow: { flex: 1 },
   centred: { textAlign: 'center' },

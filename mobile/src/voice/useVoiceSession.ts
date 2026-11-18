@@ -123,6 +123,9 @@ export function useVoiceSession({
     });
     // `usageSessionID=UUID()` and `voice.onTelemetry` (AddTaskByVoiceView.swift:38, `:125`): one usage
     // session per conversation, reported once more when the conversation closes.
+    // Set by teardown. 4fa8e21 clears `voice.onClose` before closing (AddTaskByVoiceView.swift:267), because the
+    // close lands a tick later (`closeAfterReleasingAudio`) and must not dismiss the next screen.
+    let unmounted = false;
     const usage = new VoiceUsageMeter({
       sessionId: randomUUID().toUpperCase(),
       record: (sessionId, durationSeconds) => recordVoiceUsage(queryClient, sessionId, durationSeconds),
@@ -132,7 +135,9 @@ export function useVoiceSession({
       executor: tools,
       uuid: randomUUID,
       onState: setState,
-      onClose: () => closer.current(),
+      onClose: () => {
+        if (!unmounted) closer.current();
+      },
       onTelemetry: () => usage.finish(),
     });
 
@@ -145,7 +150,6 @@ export function useVoiceSession({
     // ask for a credential and connect. `guard !starting, voice.phase == .idle`, so a second tap of Start
     // listening cannot open a second session. Deferred by a microtask so the flags are not written during
     // this effect's own commit.
-    let unmounted = false;
     let startingNow = false;
     const start = async () => {
       await Promise.resolve();
