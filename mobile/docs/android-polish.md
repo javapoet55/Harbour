@@ -3101,3 +3101,32 @@ stay as they are.
 - **Phone check:** Today → + → Add Manually. There is one header: Close · Create New Task · a gradient mic, with
   no stack bar above it. TIME ESTIMATE → Custom → + twice → Done shows "40m". Create Task is purple before you
   type and does nothing until there is a name. Check dark mode and the largest font size.
+
+### 71.7 Briefing Read aloud on the phone (§25 row 8; 04fa8d8; approved 2026-11-18)
+
+`src/voice/briefSpeech.ts` (new), `src/features/ask/BriefSectionDetail.tsx`, `app/ask/brief/[index].tsx`,
+`src/features/ask/briefHandlers.ts`, `src/components/AskNexdoView.tsx`. **New native module: `expo-speech ~57.0.3`**
+(Android `TextToSpeech`). It adds no permission, only a `<queries>` entry for the `TTS_SERVICE` intent.
+
+- A briefing section's ⋯ → **Read aloud** speaks the section's lines on the phone, at the app's voice level (the
+  Voice volume slider), after stopping any Ask voice reply. **OpenAI sharing no longer matters here.** The old
+  "Allow OpenAI sharing in Account to use Read aloud." message is gone from this page.
+- While it reads, the menu offers **Stop reading** instead. When it finishes, or after Stop, **Read aloud** comes
+  back and reads from the start again. It is disabled for an empty section.
+- **Gate:** with spoken replies off in Settings, the page says "Enable spoken replies in Settings to use Read
+  aloud." and does not speak. If the phone's engine fails: "Nexdo couldn’t start reading this briefing. Try again."
+  Both appear on the page, as Swift's do.
+- It stops when you leave the page or the app goes to the background.
+- **Android difference:** Android speaks at most 4,000 characters per utterance, where iOS has no limit. A longer
+  section is cut at a paragraph break (else a space) and the parts are queued, so it is still read in full, in
+  one go.
+- **Android difference:** the voice is the phone's default text-to-speech voice and language (Settings → Text-to-
+  speech), as Swift uses the system voice. A phone with no TTS engine should get the failure message (not tried on a phone).
+- Unchanged: Read aloud on Ask's own answer cards still uses the server voice and its OpenAI sharing gate, as in
+  Swift.
+- Tests: `briefSection.test.tsx` "on-device Read aloud" (7: speaks with no OpenAI sharing and at the voice level,
+  Stop reading and replay, the spoken-replies gate, an engine failure, an empty section, background and leaving,
+  long sections); `ask.test.tsx` (Ask hands the page `stopVoiceReply`). `jest.setup.js` mocks `expo-speech`.
+- **Phone check:** turn **off** OpenAI sharing. Ask → Daily Brief → open a section → ⋯ → Read aloud: the phone reads
+  it. ⋯ shows Stop reading; tap it, and the voice stops. Read aloud again starts from the top. Press Home while it
+  reads: it stops. Turn off spoken replies in Settings: Read aloud shows the message instead.

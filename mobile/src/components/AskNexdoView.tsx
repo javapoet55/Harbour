@@ -260,7 +260,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   // A section page calls back into this view (`ask: { request($0) }`, `read:`). Re-registered every
   // render so it always holds the current closures.
   useEffect(() => {
-    setBriefHandlers({ ask: (query) => request(query), read: readSection });
+    setBriefHandlers({ ask: (query) => request(query), stopVoiceReply: stopSpeech });
   });
   useEffect(() => () => setBriefHandlers(null), []);
 

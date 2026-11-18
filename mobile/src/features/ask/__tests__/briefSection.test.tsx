@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Share } from 'react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import * as Speech from 'expo-speech';
+import { AppState, Share } from 'react-native';
 
 import { useCoordinator } from '../../../actions/coordinator';
 import type { AssistantTurn, NexdoTask } from '../../../api';
 import type { StoredTaskAction } from '../../../lib/taskAction';
 import { useAssistantStore } from '../../../store/assistant';
+import { useAppearance } from '../../../store/appearance';
+import { useConsent } from '../../../store/consent';
 import { useSession } from '../../../store/session';
 
 const mockPush = jest.fn();
@@ -58,7 +61,15 @@ const BRIEF: AssistantTurn = {
 };
 
 const ask = jest.fn();
-const read = jest.fn();
+const stopVoiceReply = jest.fn();
+const speak = Speech.speak as jest.Mock;
+const stop = Speech.stop as jest.Mock;
+/** The options the last `Speech.speak` call was given, so a test can finish or fail the utterance. */
+const lastSpeech = () => speak.mock.calls.at(-1)?.[1] as Speech.SpeechOptions;
+
+async function openMenu() {
+  await fireEvent.press(screen.getByLabelText('Briefing options'));
+}
 
 async function open(index = '0', tasks: NexdoTask[] = [GUTTER, REPORT]) {
   mockParams = { index, title: 'Fallback title' };
@@ -78,7 +89,9 @@ beforeEach(() => {
   useAssistantStore.getState().setTurn(BRIEF, 'Give me my full day briefing for today: priorities, deadlines, conflicts, and my next move.');
   useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Ada', email: 'a@b.com', timeZone: 'UTC' } });
   useCoordinator.getState().reset();
-  setBriefHandlers({ ask, read });
+  setBriefHandlers({ ask, stopVoiceReply });
+  useConsent.setState({ ai: true, voice: true });
+  useAppearance.setState({ voiceVolume: 0.8 });
 });
 
 it('heads the page with the section, its count and the focus banner', async () => {
@@ -162,27 +175,121 @@ it('"Ask Nexdo" goes back to the brief and asks about every line', async () => {
   expect(ask).toHaveBeenCalledWith('Help me with these next move:\nCall the gutter technician now.');
 });
 
-it('the options menu reads the section aloud or shares it', async () => {
+it('the options menu shares the section', async () => {
   const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
   await open('1');
   await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
-  await fireEvent.press(screen.getByLabelText('Briefing options'));
-  await fireEvent.press(screen.getByTestId('brief-detail-read'));
-  expect(read).toHaveBeenCalledWith(1, 'Call the gutter technician now.');
-  await fireEvent.press(screen.getByLabelText('Briefing options'));
+  await openMenu();
   await fireEvent.press(screen.getByTestId('brief-detail-share'));
   expect(share).toHaveBeenCalledWith({ message: 'Call the gutter technician now.' });
   share.mockRestore();
 });
 
-it('shows why Read aloud did nothing, since this page hides the Ask composer', async () => {
-  read.mockReturnValueOnce('Allow OpenAI sharing in Account to use Read aloud.');
-  await open('1');
-  await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
-  expect(screen.queryByTestId('brief-detail-read-error')).toBeNull();
-  await fireEvent.press(screen.getByLabelText('Briefing options'));
-  await fireEvent.press(screen.getByTestId('brief-detail-read'));
-  expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Allow OpenAI sharing in Account to use Read aloud.');
+/** 04fa8d8 "Fix on-device Read aloud for iOS briefings" (BriefSectionDetailView.swift:44-54, :87-104, :196-255). */
+describe('on-device Read aloud (Phase 15)', () => {
+  it('reads the section on the phone, at the app’s voice level, after stopping any voice reply', async () => {
+    // OpenAI sharing no longer matters: nothing leaves the phone.
+    useConsent.setState({ ai: false, voice: false });
+    await open();
+    await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Top Priorities'));
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+
+    expect(stopVoiceReply).toHaveBeenCalledTimes(1);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(speak.mock.calls[0][0]).toBe('Contact gutter technician is overdue. Tackle it first.\n\nSend the report — due today');
+    expect(lastSpeech().volume).toBe(0.8);
+    expect(screen.queryByTestId('brief-detail-read-error')).toBeNull();
+  });
+
+  it('offers Stop reading while it reads, then Read aloud again once it has finished', async () => {
+    await open('1');
+    await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    await openMenu();
+    expect(screen.queryByTestId('brief-detail-read')).toBeNull();
+    expect(within(screen.getByTestId('brief-detail-stop')).getByText('Stop reading')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('brief-detail-stop'));
+    expect(stop).toHaveBeenCalled();
+
+    await openMenu();
+    expect(within(screen.getByTestId('brief-detail-read')).getByText('Read aloud')).toBeTruthy();
+    // And again, to the end this time.
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    expect(speak).toHaveBeenCalledTimes(2);
+    await act(async () => lastSpeech().onDone?.());
+    await openMenu();
+    expect(screen.getByTestId('brief-detail-read')).toBeTruthy();
+  });
+
+  it('asks for spoken replies when they are off in Settings, and does not speak', async () => {
+    useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Ada', email: 'a@b.com', timeZone: 'UTC', preference: { voiceEnabled: false } as never } });
+    await open('1');
+    await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Enable spoken replies in Settings to use Read aloud.');
+    expect(speak).not.toHaveBeenCalled();
+    expect(stopVoiceReply).not.toHaveBeenCalled();
+  });
+
+  it('says so when the phone cannot read it', async () => {
+    await open('1');
+    await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    await act(async () => lastSpeech().onError?.(new Error('no engine')));
+    expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Nexdo couldn’t start reading this briefing. Try again.');
+    await openMenu();
+    expect(screen.getByTestId('brief-detail-read')).toBeTruthy();
+  });
+
+  it('cannot read an empty section', async () => {
+    await open('5', []);
+    await openMenu();
+    expect(screen.getByTestId('brief-detail-read').props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('stops reading when the app goes to the background, and when the page closes', async () => {
+    // The preset's `AppState.addEventListener` is a mock; the page's listeners are in its calls.
+    const added = AppState.addEventListener as unknown as jest.Mock;
+    const before = added.mock.calls.length;
+    await open('1');
+    await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    const listeners = added.mock.calls.slice(before).filter(([type]) => type === 'change').map(([, listener]) => listener as (state: string) => void);
+    expect(listeners.length).toBeGreaterThan(0);
+    await act(async () => listeners.forEach((listener) => listener('background')));
+    expect(stop).toHaveBeenCalledTimes(1);
+
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    await screen.unmount();
+    expect(stop).toHaveBeenCalledTimes(2);
+  });
+
+  it('splits a section longer than the phone can speak at once, and finishes after the last part', async () => {
+    const long = Array.from({ length: 30 }, (_, n) => `Line ${n} ${'word '.repeat(40)}`.trim());
+    useAssistantStore.getState().setTurn({ ...BRIEF, visual: { summary: '', sections: [{ title: 'Next move', items: long }] } }, 'brief');
+    await open('0', []);
+    await openMenu();
+    await fireEvent.press(screen.getByTestId('brief-detail-read'));
+    expect(speak.mock.calls.length).toBeGreaterThan(1);
+    for (const [text] of speak.mock.calls) expect((text as string).length).toBeLessThanOrEqual(4000);
+    expect(speak.mock.calls.map(([text]) => text).join(' ').replace(/\s+/g, ' ')).toBe(long.join('\n\n').replace(/\s+/g, ' '));
+
+    await act(async () => (speak.mock.calls[0][1] as Speech.SpeechOptions).onDone?.());
+    await openMenu();
+    expect(screen.getByTestId('brief-detail-stop')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('brief-detail-menu-dismiss'));
+    await act(async () => lastSpeech().onDone?.());
+    await openMenu();
+    expect(screen.getByTestId('brief-detail-read')).toBeTruthy();
+  });
 });
 
 it('a section that has gone keeps its title over an empty page; Back goes back', async () => {

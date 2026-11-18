@@ -29,7 +29,7 @@ export default function BriefSection() {
         briefHandlers()?.ask(query);
       }}
       onBack={() => router.back()}
-      onRead={() => (section ? (briefHandlers()?.read(index, section.items.join('\n\n')) ?? null) : null)}
+      onStopVoiceReply={() => briefHandlers()?.stopVoiceReply()}
       title={title}
     />
   );
