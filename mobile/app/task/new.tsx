@@ -231,7 +231,7 @@ export default function NewTask() {
           )}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <LabeledField title="PROJECT" icon="folder">
+          <LabeledField title="FOLDER" icon="folder">
             <ProjectAssignmentField projectID={projectID} onChange={setProjectID} raised />
           </LabeledField>
 

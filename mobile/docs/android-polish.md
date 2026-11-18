@@ -2935,3 +2935,35 @@ tomorrow.” — **Nexdo**" (was "NexDo"), in `src/features/wellness/WellnessCho
   should go to Swift as well.
 - Tests: `chooser.test.tsx` checks the new spelling.
 - **Phone check:** open Wellness. The quote card ends with "— Nexdo".
+
+## 71. Phase 15: the Swift changes since Phase 14 (2026-11-18)
+
+Built on `rn-phase-15` from `docs/IOS_TO_REACT_NATIVE.md` §25, one commit per row, from the Swift source at
+`2932784`. There are no captures for this phase (a Windows pass), so nothing here is checked against a
+screenshot. The standing rules apply ("phone", not "iPhone"/"iOS"). No earlier deviation is reverted.
+
+### 71.1 Projects are Folders (§25 row 2; 2991151)
+
+Swift's copy, word for word, on the Folders tab (`TaskListParts.tsx`), the list (`ProjectsList.tsx`), the
+editor (`ProjectEditorForm.tsx`, titles in `app/(tabs)/(tasks)/_layout.tsx`), the folder detail and its delete
+alert (`project/[id]/index.tsx`), the card hint (`ProjectParts.tsx`), the assignment field
+(`ProjectAssignmentField.tsx`), Create New Task's **FOLDER** label and the business-research Task Details
+caption "Folder" (`app/task/[id].tsx`).
+
+- **"No project" becomes "No Named Folder".** RN never took Swift's "No Named Project" (Swift has used it since
+  `7919779`, 2026-09-24), so this also closes that older gap. The search that reveals the unassigned card matches
+  "No Named Folder".
+- **The load error is Swift's now:** "Couldn’t refresh folders. Check your connection and try again."
+  (`NexdoApp.swift:953`) on the list and the assignment field. RN's own "Couldn’t load your projects." is gone.
+  Swift's "Showing saved folders." line under it is not added; RN shows the list it has either way.
+- **RN-only copy, renamed to match:** the edit sheet's "Loading folders…" and "This folder is no longer in your
+  list." (Swift's editor never loads, so it has no such state).
+- **Kept as Swift has them:** Task Details' normal **PROJECT** field label (`TaskDetailsView.swift:55`) and the Help
+  topic "How do I organize tasks into a project?" (`HelpTopics.swift:36`). Swift did not rename either (§25 Swift
+  bug 3). When Swift fixes them, RN follows.
+- Test ids (`project-*`, `segment-Folders`) follow the label for the tab only; the other ids are unchanged.
+- Tests: `projects.test.tsx` "Folders (Phase 15, 2991151)" plus the updated assertions in `tasks-screen`,
+  `editor-fields`, `task-editor`, `task-detail-business`, `android-labels`, `TaskComponents` and `projectQuery`.
+- **Phone check:** Tasks → **Folders** tab: "Search Folders", "Folders", "+ New Folder", the "No Named Folder" card.
+  Open a folder → ⋯ shows "Edit folder" / "Delete folder", and Delete asks "Delete this folder?". Create New Task
+  shows FOLDER and "No Named Folder".

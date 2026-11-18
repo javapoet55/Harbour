@@ -24,7 +24,7 @@ export function ProjectsList({
   onRefresh,
   refreshing = false,
 }: {
-  /** The task list, for the "No project" card's open/done counts. */
+  /** The task list, for the "No Named Folder" card's open/done counts. */
   tasks: NexdoTask[];
   onOpenProject: (id: string) => void;
   onOpenUnassigned: () => void;
@@ -43,8 +43,8 @@ export function ProjectsList({
 
   const visible = projectResults(projects.data?.projects ?? [], search, sort);
   const loaded = projects.isSuccess;
-  // `CalendarSearch.matches("No project", query: search)` (ProjectsView.swift:44, 53).
-  const showsUnassigned = searchMatches('No project', search);
+  // `CalendarSearch.matches("No Named Folder", query: search)` (ProjectsView.swift:43, 52; 2991151).
+  const showsUnassigned = searchMatches('No Named Folder', search);
   const unassigned = tasks.filter((task) => task.projectId == null && task.status !== 'CANCELLED');
 
   return (
@@ -56,10 +56,10 @@ export function ProjectsList({
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.searchRow}>
-        <ProjectSearchField placeholder="Search projects" value={search} onChangeText={setSearch} testID="project-search" />
+        <ProjectSearchField placeholder="Search Folders" value={search} onChangeText={setSearch} testID="project-search" />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Sort projects"
+          accessibilityLabel="Sort folders"
           accessibilityValue={{ text: sort }}
           onPress={() => setSortOpen((open) => !open)}
           testID="project-sort"
@@ -69,7 +69,7 @@ export function ProjectsList({
         </Pressable>
       </View>
 
-      {/* `Menu { Picker("Sort projects", ...) }` (ProjectsView.swift:25-27), as an inline list. */}
+      {/* `Menu { Picker("Sort folders", ...) }` (ProjectsView.swift:25-27), as an inline list. */}
       {sortOpen ? (
         <View style={[styles.sortMenu, surface]}>
           {PROJECT_SORTS.map((option) => (
@@ -94,24 +94,24 @@ export function ProjectsList({
 
       <View style={styles.titleRow}>
         <Text accessibilityRole="header" style={[styles.title, { color: theme.colors.ink }]}>
-          Projects
+          Folders
         </Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="New project" onPress={onNewProject} testID="new-project" style={styles.newProject}>
+        <Pressable accessibilityRole="button" accessibilityLabel="New Folder" onPress={onNewProject} testID="new-project" style={styles.newProject}>
           <TaskSymbol name="plus" size={15} color={accent} />
-          <Text style={[styles.newProjectLabel, { color: accent }]}>New project</Text>
+          <Text style={[styles.newProjectLabel, { color: accent }]}>New Folder</Text>
         </Pressable>
       </View>
 
       {projects.isLoading && !loaded ? (
         <View style={styles.centre}>
           <ActivityIndicator />
-          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Loading projects…</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Loading folders…</Text>
         </View>
       ) : null}
 
       {projects.isError ? (
         <View style={styles.error}>
-          <Text style={[styles.subheadline, { color: theme.colors.danger }]}>Couldn’t load your projects.</Text>
+          <Text style={[styles.subheadline, { color: theme.colors.danger }]}>Couldn’t refresh folders. Check your connection and try again.</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={onRefresh} style={styles.retry} testID="projects-retry">
             <Text style={[theme.typography.body, { color: accent }]}>Retry</Text>
           </Pressable>
@@ -123,10 +123,10 @@ export function ProjectsList({
         <View style={styles.empty}>
           <TaskSymbol name="folder" size={38} color={theme.colors.secondary} />
           <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-            {search.length === 0 ? 'Organize your tasks' : 'No matching projects'}
+            {search.length === 0 ? 'Organize your tasks' : 'No matching folders'}
           </Text>
           <Text style={[styles.subheadline, styles.centred, { color: theme.colors.secondary }]}>
-            {search.length === 0 ? 'Create a project to keep related tasks together.' : 'Try a different project name.'}
+            {search.length === 0 ? 'Create a folder to keep related tasks together.' : 'Try a different folder name.'}
           </Text>
         </View>
       ) : null}
@@ -140,12 +140,12 @@ export function ProjectsList({
         ))}
       </View>
 
-      {/* The "No project" card (ProjectsView.swift:53-66). */}
+      {/* The "No Named Folder" card (ProjectsView.swift:52-66). */}
       {loaded && showsUnassigned ? (
         <Pressable
           accessible
           accessibilityRole="button"
-          accessibilityLabel="No project"
+          accessibilityLabel="No Named Folder"
           accessibilityHint="Opens unassigned tasks"
           onPress={onOpenUnassigned}
           testID="project-card-unassigned"
@@ -153,7 +153,7 @@ export function ProjectsList({
         >
           <ProjectFolder />
           <View style={styles.grow}>
-            <Text style={[styles.cardName, { color: theme.colors.ink }]}>No project</Text>
+            <Text style={[styles.cardName, { color: theme.colors.ink }]}>No Named Folder</Text>
             <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
               {`Open: ${unassigned.filter((task) => !isDone(task)).length}   Done: ${unassigned.filter(isDone).length}`}
             </Text>

@@ -387,12 +387,14 @@ describe('Tasks screen', () => {
     });
     await renderTasks();
 
-    await fireEvent.press(screen.getByTestId('segment-Projects'));
+    // 2991151: the second tab is "Folders" (RootView.swift:1848).
+    await fireEvent.press(screen.getByTestId('segment-Folders'));
 
     await waitFor(() => expect(screen.getByText('Home move')).toBeTruthy());
-    // The header button and the "No project" folder, both from ProjectsView.swift.
-    expect(screen.getByLabelText('New project')).toBeTruthy();
-    expect(screen.getByText('No project')).toBeTruthy();
+    // The header button and the "No Named Folder" folder, both from ProjectsView.swift.
+    expect(screen.getByLabelText('New Folder')).toBeTruthy();
+    expect(screen.getByText('No Named Folder')).toBeTruthy();
+    expect(screen.queryByTestId('segment-Projects')).toBeNull();
   });
 });
 
@@ -487,16 +489,16 @@ describe('Tasks screen search and redesign', () => {
     expect(screen.getByText('All open and completed tasks, with open tasks first.')).toBeTruthy();
   });
 
-  it('switches Tasks and Projects through the pill pair, marking the selected pill', async () => {
+  it('switches Tasks and Folders through the pill pair, marking the selected pill', async () => {
     await renderTasks();
     expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('segment-Tasks-selected')).toBeTruthy();
 
-    await fireEvent.press(screen.getByTestId('segment-Projects'));
+    await fireEvent.press(screen.getByTestId('segment-Folders'));
 
-    expect(screen.getByTestId('segment-Projects').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('segment-Folders').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(false);
-    expect(screen.getByTestId('segment-Projects-selected')).toBeTruthy();
+    expect(screen.getByTestId('segment-Folders-selected')).toBeTruthy();
     // The filter and search buttons belong to the task list only (`if !showingProjects`).
     expect(screen.queryByLabelText('Task filters')).toBeNull();
   });

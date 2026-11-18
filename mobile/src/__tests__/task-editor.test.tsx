@@ -77,7 +77,9 @@ describe('Task creation editor', () => {
 
     expect(screen.getByText('TASK NAME')).toBeTruthy();
     expect(screen.getByText('NOTES')).toBeTruthy();
-    expect(screen.getByText('PROJECT')).toBeTruthy();
+    // 2991151: FOLDER (RootView.swift:2283).
+    expect(screen.getByText('FOLDER')).toBeTruthy();
+    expect(screen.queryByText('PROJECT')).toBeNull();
     expect(screen.getByText('DATE')).toBeTruthy();
     expect(screen.getByText('TIME ESTIMATE')).toBeTruthy();
     // Swift's creation form has no priority, energy, tags or recurrence.

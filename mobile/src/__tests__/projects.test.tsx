@@ -126,10 +126,10 @@ describe('Projects list', () => {
     expect(screen.getByText('Open: 0   Done: 2')).toBeTruthy();
   });
 
-  it('shows the No project folder with the unassigned counts', async () => {
+  it('shows the No Named Folder card with the unassigned counts', async () => {
     await renderList();
 
-    await waitFor(() => expect(screen.getByText('No project')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No Named Folder')).toBeTruthy());
     // One unassigned open task in the fixture, none done.
     expect(screen.getByText('Open: 1   Done: 0')).toBeTruthy();
   });
@@ -163,7 +163,7 @@ describe('Projects list', () => {
     await renderList();
 
     await waitFor(() => expect(screen.getByText('Organize your tasks')).toBeTruthy());
-    expect(screen.getByText('Create a project to keep related tasks together.')).toBeTruthy();
+    expect(screen.getByText('Create a folder to keep related tasks together.')).toBeTruthy();
   });
 
   it('opens a project card', async () => {
@@ -273,11 +273,11 @@ describe('Project detail', () => {
     await waitFor(() => expect(screen.getByText('Book movers')).toBeTruthy());
   });
 
-  it('lists unassigned tasks under the No project folder', async () => {
+  it('lists unassigned tasks under the No Named Folder folder', async () => {
     await renderDetail('unassigned');
 
     await waitFor(() => expect(screen.getByText('Unfiled errand')).toBeTruthy());
-    expect(screen.getByTestId('project-title').props.children).toBe('No project');
+    expect(screen.getByTestId('project-title').props.children).toBe('No Named Folder');
     expect(screen.queryByText('Pack boxes')).toBeNull();
   });
 
@@ -296,8 +296,8 @@ describe('Project detail', () => {
     await fireEvent.press(screen.getByTestId('menu-delete-project'));
 
     expect(Alert.alert).toHaveBeenCalledWith(
-      'Delete this project?',
-      'Its tasks will move to No project. No tasks will be deleted.',
+      'Delete this folder?',
+      'Its tasks will move to No Named Folder. No tasks will be deleted.',
       expect.anything(),
     );
   });
@@ -314,7 +314,71 @@ describe('Project detail', () => {
     mockProjects.mockResolvedValue({ projects: [], unassignedTaskCount: 0 });
     await renderDetail();
 
-    await waitFor(() => expect(screen.getByText('Project unavailable')).toBeTruthy());
-    expect(screen.getByText('This project may have been deleted.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Folder unavailable')).toBeTruthy());
+    expect(screen.getByText('This folder may have been deleted.')).toBeTruthy();
+  });
+});
+
+/**
+ * 2991151 "Rename iOS task projects to folders" (ProjectsView.swift:24-60, :87, :129-146, :201-277; NexdoApp.swift:953):
+ * every visible "project" on the Folders screens now says "folder", in Swift's exact copy.
+ */
+describe('Folders (Phase 15, 2991151)', () => {
+  function renderList() {
+    return wrap(<ProjectsList tasks={TASKS} onOpenProject={mockPush} onOpenUnassigned={jest.fn()} onNewProject={jest.fn()} onRefresh={jest.fn()} />);
+  }
+
+  it('titles the list Folders, with Search Folders, Sort folders and New Folder', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getByText('Home move')).toBeTruthy());
+
+    expect(screen.getByText('Folders')).toBeTruthy();
+    expect(screen.getByTestId('project-search').props.placeholder).toBe('Search Folders');
+    expect(screen.getByLabelText('Search Folders')).toBeTruthy();
+    expect(screen.getByTestId('project-sort').props.accessibilityLabel).toBe('Sort folders');
+    expect(screen.getByTestId('new-project').props.accessibilityLabel).toBe('New Folder');
+    expect(screen.getByText('New Folder')).toBeTruthy();
+    expect(screen.getByTestId('project-card-p1').props.accessibilityHint).toBe('Opens folder tasks');
+    expect(screen.getByTestId('project-card-unassigned').props.accessibilityLabel).toBe('No Named Folder');
+  });
+
+  it('says No matching folders, and still finds No Named Folder by search', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getByText('Home move')).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByTestId('project-search'), 'qqq');
+    await waitFor(() => expect(screen.getByText('No matching folders')).toBeTruthy());
+    expect(screen.getByText('Try a different folder name.')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId('project-search'), 'named fold');
+    await waitFor(() => expect(screen.getByTestId('project-card-unassigned')).toBeTruthy());
+  });
+
+  it('shows Loading folders… and the refresh error in Swift’s words', async () => {
+    let fail: (error: Error) => void = () => undefined;
+    mockProjects.mockReturnValue(new Promise((_, reject) => { fail = reject; }));
+    await renderList();
+    expect(await screen.findByText('Loading folders…')).toBeTruthy();
+
+    fail(new Error('offline'));
+    expect(await screen.findByText('Couldn’t refresh folders. Check your connection and try again.')).toBeTruthy();
+  });
+
+  it('names the editor field Folder name', async () => {
+    await wrap(<NewProject />);
+    expect(screen.getByText('Folder name')).toBeTruthy();
+    expect(screen.getByLabelText('Folder name')).toBeTruthy();
+  });
+
+  it('labels the folder menu and filter as folders', async () => {
+    mockParams.mockReturnValue({ id: 'p1' });
+    await wrap(<ProjectDetail />);
+    await waitFor(() => expect(screen.getByText('Pack boxes')).toBeTruthy());
+
+    expect(screen.getByTestId('project-actions').props.accessibilityLabel).toBe('Folder actions');
+    expect(screen.getByTestId('project-filters').props.accessibilityLabel).toBe('Filter folder tasks');
+    await fireEvent.press(screen.getByTestId('project-actions'));
+    expect(screen.getByText('Edit folder')).toBeTruthy();
+    expect(screen.getByText('Delete folder')).toBeTruthy();
   });
 });

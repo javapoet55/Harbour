@@ -110,7 +110,9 @@ describe('Task Details with business research', () => {
     // The information card replaces TASK / metadata / PROJECT.
     expect(screen.queryByText('TASK')).toBeNull();
     expect(screen.queryByText('PRIORITY')).toBeNull();
-    for (const label of ['Task', 'Priority', 'Estimate', 'Project']) expect(screen.getByText(label)).toBeTruthy();
+    // 2991151: the business-research caption is "Folder" (TaskDetailsView.swift:224).
+    for (const label of ['Task', 'Priority', 'Estimate', 'Folder']) expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.queryByText('Project')).toBeNull();
     expect(screen.getByLabelText('Task title').props.value).toBe('Call a plumber');
 
     // schedule … notes wait behind the menu.
