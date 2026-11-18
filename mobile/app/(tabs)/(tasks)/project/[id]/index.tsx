@@ -15,7 +15,7 @@ import { useTheme } from '../../../../../src/theme';
 /**
  * Port of `ProjectDetailView` (ios/App/ProjectsView.swift:173-294).
  *
- * `projectID` is nullable in Swift: the "No project" card opens the same screen with `nil`, listing
+ * `projectID` is nullable in Swift: the "No Named Folder" card opens the same screen with `nil`, listing
  * unassigned tasks. Here that is the reserved path segment `unassigned`, because a route cannot carry
  * a null id.
  */
@@ -23,7 +23,7 @@ export default function ProjectDetail() {
   const theme = useTheme();
   const accent = useProjectAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
-  // The "No project" folder.
+  // The "No Named Folder" folder (2991151).
   const projectID = id === 'unassigned' ? null : (id ?? null);
 
   const profile = useSession((state) => state.profile);
@@ -77,21 +77,21 @@ export default function ProjectDetail() {
   const confirmDelete = () => {
     if (!project) return;
     // `.confirmationDialog` (ProjectsView.swift:269-273).
-    Alert.alert('Delete this project?', 'Its tasks will move to No project. No tasks will be deleted.', [
+    Alert.alert('Delete this folder?', 'Its tasks will move to No Named Folder. No tasks will be deleted.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete project',
+        text: 'Delete folder',
         style: 'destructive',
         onPress: () => remove.mutate(project.id, { onSuccess: () => router.back() }),
       },
     ]);
   };
 
-  const title = project?.name ?? 'No project';
+  const title = project?.name ?? 'No Named Folder';
 
   return (
     <View style={styles.fill}>
-      {/* `.navigationTitle(project?.name ?? "No project")` and the `.topBarTrailing` menu
+      {/* `.navigationTitle(project?.name ?? "No Named Folder")` and the `.topBarTrailing` menu
           (ProjectsView.swift:258-268). Both are set here rather than in `_layout.tsx` because they
           depend on the loaded project. */}
       <Stack.Screen
@@ -100,7 +100,7 @@ export default function ProjectDetail() {
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Project actions"
+              accessibilityLabel="Folder actions"
               accessibilityState={{ disabled: remove.isPending || missing }}
               disabled={remove.isPending || missing}
               onPress={() => setMenuOpen((open) => !open)}
@@ -148,7 +148,7 @@ export default function ProjectDetail() {
             {project ? (
               <>
                 <MenuRow
-                  label="Edit project"
+                  label="Edit folder"
                   onPress={() => {
                     setMenuOpen(false);
                     router.push(`/project/${project.id}/edit`);
@@ -156,7 +156,7 @@ export default function ProjectDetail() {
                   testID="menu-edit-project"
                 />
                 <MenuRow
-                  label="Delete project"
+                  label="Delete folder"
                   destructive
                   last
                   onPress={() => {
@@ -174,7 +174,7 @@ export default function ProjectDetail() {
           <ProjectSearchField placeholder="Search tasks" value={search} onChangeText={setSearch} testID="project-task-search" />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Filter project tasks"
+            accessibilityLabel="Filter folder tasks"
             onPress={() => setFiltersOpen((open) => !open)}
             testID="project-filters"
             style={styles.filterButton}
@@ -233,9 +233,9 @@ export default function ProjectDetail() {
         ) : missing ? (
           <View style={styles.centre}>
             <TaskSymbol name="folder" size={38} color={theme.colors.secondary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Project unavailable</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Folder unavailable</Text>
             <Text style={[styles.subheadline, styles.centred, { color: theme.colors.secondary }]}>
-              This project may have been deleted.
+              This folder may have been deleted.
             </Text>
           </View>
         ) : (
@@ -258,7 +258,7 @@ export default function ProjectDetail() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Add task to ${project?.name ?? 'project'}`}
+                  accessibilityLabel={`Add task to ${project?.name ?? 'folder'}`}
                   onPress={() => router.push({ pathname: '/task/new', params: projectID ? { projectId: projectID } : {} })}
                   testID="project-empty-add"
                   style={[styles.addTaskCapsule, { backgroundColor: projectColor(project?.color ?? '#8875ff') }]}
@@ -279,7 +279,7 @@ export default function ProjectDetail() {
         {remove.isPending ? (
           <View style={styles.centre}>
             <ActivityIndicator />
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Deleting project…</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Deleting folder…</Text>
           </View>
         ) : null}
       </ScrollView>

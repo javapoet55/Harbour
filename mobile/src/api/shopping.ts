@@ -188,15 +188,22 @@ export type ShoppingEmailSettings = {
   consent: true;
   pickupDate?: string;
   pickupStartHour?: number;
+  /** d471768: yyyy-MM-dd for a one-time email, null for weekly (email-domain.ts:9). */
+  sendDate?: string | null;
 };
 export type ShoppingEmailSnapshot = {
   available: boolean;
+  /** d471768 (email-service.ts:18): true on a server that takes `sendDate`. */
+  supportsOneTime?: boolean;
   account: { email: string; status: string } | null;
   schedule:
-    | (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone' | 'pickupDate' | 'pickupStartHour'> & {
+    | (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone' | 'pickupDate' | 'pickupStartHour' | 'sendDate'> & {
         customerPhone: string | null;
         pickupDate?: string | null;
         pickupStartHour?: number | null;
+        sendDate?: string | null;
+        /** The one-time email has been queued (and is not sent again). */
+        oneTimeQueued?: boolean;
         enabled: boolean;
         nextRunAt: string;
         runs: { id: string; dueAt: string; status: string; detail: string | null }[];

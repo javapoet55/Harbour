@@ -406,7 +406,7 @@ export default function TaskDetail() {
               <View style={styles.informationRow}>
                 <InfoIcon name="folder-outline" color={SYSTEM_ORANGE} />
                 <View style={[styles.grow, styles.informationField]}>
-                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>Project</Text>
+                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>Folder</Text>
                   <ProjectAssignmentField projectID={current.projectId} onChange={(projectId) => set({ projectId })} />
                 </View>
               </View>

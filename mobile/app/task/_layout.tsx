@@ -1,31 +1,18 @@
-import { router, Stack } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Stack } from 'expo-router';
 
-import { Text } from '../../src/components';
 import { stackHeaderOptions, useTheme} from '../../src/theme';
 
 /**
  * Presentation matches `TasksView`'s modifiers (ios/App/RootView.swift:1697-1726):
  *
- * - `new` and `[id]` are `.sheet`s wrapping a `NavigationStack`, so both are modals with an inline
- *   title and a Close/Cancel button. `[id]` additionally carries `.presentationDetents([.large])`.
+ * - `new` and `[id]` are `.sheet`s wrapping a `NavigationStack`, so both are modals. Both hide the bar and
+ *   draw their own header (`new` since 9e82c95). `[id]` additionally carries `.presentationDetents([.large])`.
  * - `filters` is a `.sheet` with `[.medium, .large]` detents and a "Done" confirmation action. Expo
  *   Router has no detent API on Android, so it is a plain modal; see Visual gaps.
  * - `voice-capture` is a `.fullScreenCover` (RootView.swift:1698).
  */
 export default function TaskLayout() {
   const theme = useTheme();
-
-  const closeButton = (label: string) => {
-    function CloseButton() {
-      return (
-        <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>{label}</Text>
-        </Pressable>
-      );
-    }
-    return CloseButton;
-  };
 
   return (
     <Stack
@@ -34,8 +21,9 @@ export default function TaskLayout() {
         ...stackHeaderOptions(theme, theme.colors.groupedBackground),
       }}
     >
-      {/* `.navigationTitle("Create New Task")` (RootView.swift:2110). */}
-      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'Create New Task', headerLeft: closeButton('Close') }} />
+      {/* 9e82c95 `.toolbar(.hidden, for: .navigationBar)` (RootView.swift:2262-2344): the screen draws its own header,
+          Close, "Create New Task" and the microphone (`creationHeader`, :2346-2387). */}
+      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'Create New Task', headerShown: false }} />
       {/* `TaskDetailsView(task:).toolbar(.hidden, for: .navigationBar)` (RootView.swift:2014): no bar; the screen's
           own header carries the title and its xmark. A "Close / Task" bar here gave the sheet two closes. */}
       <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerShown: false }} />

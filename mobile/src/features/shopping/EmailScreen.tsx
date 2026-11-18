@@ -6,7 +6,7 @@ import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Switch
 
 import { shoppingEmailApi, type GroceryList, type ShoppingEmailSnapshot } from '../../api/shopping';
 import { KeyboardAwareScrollView } from '../../components/keyboard';
-import { ClockField } from '../../components/SettingsControls';
+import { ClockField, SettingsSegments } from '../../components/SettingsControls';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { inputText, textStyles, useTheme } from '../../theme';
@@ -17,10 +17,10 @@ import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
 import { remaining } from './model';
 
 /**
- * `ShoppingEmailView` (ios/App/ShoppingEmailView.swift:32-358), "Share List": send the checked items of
- * this list to a store manager every week from the account's Gmail, with the customer's phone number
- * and a preferred pickup time. Reached from Shopping Detail's Schedule Email and Share List's "Weekly
- * email to store manager".
+ * `ShoppingEmailView` (ios/App/ShoppingEmailView.swift:33-385), "Share List": send the checked items of
+ * this list to a store manager from the account's Gmail, once (d471768's default) or every week, with the
+ * customer's phone number and a preferred pickup time. Reached from Shopping Detail's Schedule Email and
+ * Share List's "Weekly email to store manager".
  *
  * The fields are filled from the saved schedule once (`didLoadSchedule`); a reload or a Gmail connection
  * never wipes what is being typed. One reason under the permission toggle says why Save is off.
@@ -29,6 +29,23 @@ import { remaining } from './model';
  */
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** `enum Frequency { case oneTime = "One Time", weekly = "Repeat" }` (:52, d471768). */
+export type Frequency = 'oneTime' | 'weekly';
+const FREQUENCIES = [
+  { value: 'oneTime', title: 'One Time' },
+  { value: 'weekly', title: 'Repeat' },
+] as const;
+
+/** `Calendar.current.date(byAdding: .day, value: 1, to: Date())` (:43, :46): this time tomorrow. */
+const tomorrow = () => Date.now() + 86_400_000;
+
+/** A saved yyyy-MM-dd as noon of that day on the phone, as `calendarDateFormatter.date(from:)` (:347-348). */
+function localDay(text: string | null | undefined): number | null {
+  if (!text || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const [y, m, d] = text.split('-').map(Number);
+  return new Date(y, m - 1, d, 12).getTime();
+}
 
 const ART: Record<'email' | 'cart' | 'sender' | 'people' | 'calendar' | 'shield' | 'check' | 'plane', ImageSourcePropType> = {
   email: require('../../../assets/share-list/email.png'),
@@ -56,15 +73,19 @@ export function pickupWindow(hour: number): string {
   return `${label(hour)} – ${label(hour + 1)}`;
 }
 
-/** `saveBlocker` (:293-302): the first reason Save is off, or null. */
-export function saveBlocker(snapshot: ShoppingEmailSnapshot | null, form: { name: string; recipient: string; phone: string; consent: boolean }): string | null {
+/** `saveBlocker` (:320-330): the first reason Save is off, or null. */
+export function saveBlocker(
+  snapshot: ShoppingEmailSnapshot | null,
+  form: { name: string; recipient: string; phone: string; consent: boolean; frequency?: Frequency },
+): string | null {
   if (!snapshot) return 'Unable to check email setup. Tap Check availability again.';
-  if (!snapshot.available) return 'Weekly email is unavailable on this server. Your entries are kept; check availability again after it is enabled.';
+  if (!snapshot.available) return 'Scheduled email is unavailable on this server. Your entries are kept; check availability again after it is enabled.';
+  if ((form.frequency ?? 'oneTime') === 'oneTime' && snapshot.supportsOneTime !== true) return 'One-time scheduling is unavailable on this server.';
   if (snapshot.account?.status !== 'connected') return 'Connect Gmail with email-sending permission before saving. A Calendar connection alone cannot send email.';
   if (form.name.trim() === '') return 'Enter the store manager’s name.';
   if (form.recipient.trim() === '') return 'Enter the store manager’s email address.';
   if (!/^\+[1-9][0-9]{7,14}$/.test(normalizedPhone(form.phone))) return 'Enter your phone number with country code so the store can contact you.';
-  if (!form.consent) return 'Turn on permission to authorize weekly emails.';
+  if (!form.consent) return 'Turn on permission to authorize scheduled email.';
   return null;
 }
 
@@ -87,6 +108,17 @@ export function displayDate(text: string, zone: string): string {
   return `${date} at ${time} (${timeZone})`;
 }
 
+/**
+ * `statusCard`'s state (:244-247, d471768): a one-time email that went out (queued, now disabled, and its run not
+ * cancelled) is Finished; otherwise Active or Paused.
+ */
+export function scheduleState(schedule: NonNullable<ShoppingEmailSnapshot['schedule']>): { oneTime: boolean; finished: boolean; state: 'Active' | 'Finished' | 'Paused' } {
+  const oneTime = schedule.sendDate != null;
+  const lastRun = schedule.runs.find((run) => run.dueAt === schedule.nextRunAt);
+  const finished = oneTime && !schedule.enabled && schedule.oneTimeQueued === true && lastRun?.status !== 'cancelled';
+  return { oneTime, finished, state: schedule.enabled ? 'Active' : finished ? 'Finished' : 'Paused' };
+}
+
 /** `status.capitalized`. */
 const capitalized = (value: string) => value.toLowerCase().replace(/(^|\s)(\S)/g, (_, space: string, letter: string) => space + letter.toUpperCase());
 
@@ -104,11 +136,14 @@ export function EmailScreen({ list }: { list: GroceryList }) {
   const [customerPhone, setCustomerPhone] = useState('');
   const [name, setName] = useState('');
   const [zone, setZone] = useState(deviceZone);
+  // d471768 (:42-47): One Time by default, sending tomorrow, with pickup tomorrow 11 AM – 12 PM.
+  const [frequency, setFrequencyState] = useState<Frequency>('oneTime');
+  const [sendDate, setSendDate] = useState(tomorrow);
   const [weekday, setWeekday] = useState(6);
   const [time, setTime] = useState('10:00');
-  // `pickupDate = Date()`; saved as its day in the phone's calendar (`pickupDateText`, :202-205).
-  const [pickupDate, setPickupDate] = useState(() => Date.now());
-  const [pickupStartHour, setPickupStartHour] = useState(9);
+  // Saved as its day in the phone's calendar (`calendarDateFormatter`, :221-227).
+  const [pickupDate, setPickupDate] = useState(tomorrow);
+  const [pickupStartHour, setPickupStartHour] = useState(11);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,10 +157,13 @@ export function EmailScreen({ list }: { list: GroceryList }) {
       setSnapshot(value);
       const s = value.schedule;
       if (!didLoadSchedule.current && s) {
-        if (s.pickupDate && /^\d{4}-\d{2}-\d{2}$/.test(s.pickupDate)) {
-          const [y, m, d] = s.pickupDate.split('-').map(Number);
-          setPickupDate(new Date(y, m - 1, d, 12).getTime());
-        }
+        // `frequency = s.sendDate == nil ? .weekly : .oneTime` (:346).
+        setFrequencyState(s.sendDate == null ? 'weekly' : 'oneTime');
+        const savedSend = localDay(s.sendDate);
+        if (savedSend !== null) setSendDate(savedSend);
+        const savedPickup = localDay(s.pickupDate);
+        if (savedPickup !== null) setPickupDate(savedPickup);
+        // Swift's fallback is still 9 (:349), though the new default is 11 (§25 Swift bug 7).
         setPickupStartHour(s.pickupStartHour ?? 9);
         setCustomerPhone(s.customerPhone ?? '');
         setRecipient(s.recipient);
@@ -166,7 +204,13 @@ export function EmailScreen({ list }: { list: GroceryList }) {
     }
   };
 
-  const blocker = saveBlocker(snapshot, { name, recipient, phone: customerPhone, consent });
+  const oneTime = frequency === 'oneTime';
+  // `.onChange(of: frequency) { consent = false }` (:172).
+  const setFrequency = (next: Frequency) => {
+    setFrequencyState(next);
+    setConsent(false);
+  };
+  const blocker = saveBlocker(snapshot, { name, recipient, phone: customerPhone, consent, frequency });
 
   /** `save()` (:337-341). */
   const save = () => {
@@ -182,6 +226,8 @@ export function EmailScreen({ list }: { list: GroceryList }) {
         hour: Number.isFinite(hour) ? hour : 10,
         minute: Number.isFinite(minute) ? minute : 0,
         consent: true,
+        // `"sendDate": frequency == .oneTime ? … : NSNull()` (:367).
+        sendDate: oneTime ? momentDay(sendDate, deviceZone()) : null,
         pickupDate: momentDay(pickupDate, deviceZone()),
         pickupStartHour,
       }),
@@ -244,6 +290,7 @@ export function EmailScreen({ list }: { list: GroceryList }) {
     />
   );
   const schedule = snapshot?.schedule ?? null;
+  const status = schedule ? scheduleState(schedule) : null;
   const savedZone = schedule?.timeZone ?? zone;
   const checked = list.items.length - remaining(list);
 
@@ -264,23 +311,23 @@ export function EmailScreen({ list }: { list: GroceryList }) {
             <View style={styles.cardHead}>
               <Image accessible={false} resizeMode="contain" source={ART.email} style={styles.introArt} />
               <View style={[styles.grow, styles.gap7]}>
-                <Text style={[styles.eyebrow, { color: purple }]}>WEEKLY SHOPPING EMAIL</Text>
+                <Text style={[styles.eyebrow, { color: purple }]}>SHOPPING LIST EMAIL</Text>
                 <Text style={[styles.title3, { color: ink }]}>Send your shopping list automatically</Text>
                 <Text style={[textStyles.subheadline, { color: muted }]}>
-                  Send checked shopping items to your store manager every week, even when NexDo is closed. Unchecked items are excluded. If nothing is checked, the email is skipped.
+                  Send checked shopping items to your store manager, even when NexDo is closed. Unchecked items are excluded. If nothing is checked, the email is skipped.
                 </Text>
               </View>
             </View>
             <View style={[styles.tip, { backgroundColor: withAlpha(purple, 0.06) }]}>
               <Ionicons color="#007AFF" name="bulb" size={15} />
-              <Text style={[styles.caption, styles.grow, { color: '#007AFF' }]}>Keep your store in sync. Save time on your weekly shop.</Text>
+              <Text style={[styles.caption, styles.grow, { color: '#007AFF' }]}>Keep your store in sync. Save time on your next shop.</Text>
               <Image accessible={false} resizeMode="contain" source={ART.plane} style={[styles.plane, styles.multiply as object]} />
             </View>
           </LinearGradient>
 
           {card(
             list.title,
-            'Selected list for weekly sharing.',
+            'Selected list for sharing.',
             'cart',
             <View style={[styles.countPill, { backgroundColor: withAlpha(purple, 0.06) }]}>
               <Text style={[styles.caption, { color: muted }]} testID="shopping-email-count">{`${checked} to send · ${list.items.length} items`}</Text>
@@ -321,7 +368,7 @@ export function EmailScreen({ list }: { list: GroceryList }) {
                   </Pressable>
                 </View>
               ) : null}
-              {snapshot?.available === false ? <Text style={[styles.caption, { color: muted }]}>Weekly email is not enabled on this server yet.</Text> : null}
+              {snapshot?.available === false ? <Text style={[styles.caption, { color: muted }]}>Scheduled email is not enabled on this server yet.</Text> : null}
             </>,
           )}
 
@@ -360,12 +407,14 @@ export function EmailScreen({ list }: { list: GroceryList }) {
             </>,
           )}
 
-          {/* `scheduleCard` (:161-196). */}
+          {/* `scheduleCard` (:165-215). */}
           {card(
             'Schedule',
             'Choose when to send your list.',
             'calendar',
             <>
+              {/* `Picker("Send frequency").pickerStyle(.segmented)` (:167-172, d471768). */}
+              <SettingsSegments label="Send frequency" onChange={setFrequency} options={FREQUENCIES} testIDPrefix="shopping-email-frequency" value={frequency} />
               {field(
                 'Timezone',
                 <MenuPicker
@@ -380,23 +429,25 @@ export function EmailScreen({ list }: { list: GroceryList }) {
               )}
               <View style={[large ? styles.column10 : styles.row10]}>
                 <View style={large ? null : styles.grow}>
-                  {field(
-                    'Repeat',
-                    <MenuPicker
-                      accessibilityLabel="Repeat weekly on"
-                      hideLabel
-                      label="Day"
-                      onChange={setWeekday}
-                      options={DAYS.map((title, value) => ({ value, title }))}
-                      testID="shopping-email-weekday"
-                      value={weekday}
-                    />,
-                  )}
+                  {oneTime
+                    ? field('Send date', <DateField label="" onChange={setSendDate} testID="shopping-email-send-date" value={sendDate} zone={deviceZone()} />)
+                    : field(
+                        'Repeat weekly on',
+                        <MenuPicker
+                          accessibilityLabel="Repeat weekly on"
+                          hideLabel
+                          label="Day"
+                          onChange={setWeekday}
+                          options={DAYS.map((title, value) => ({ value, title }))}
+                          testID="shopping-email-weekday"
+                          value={weekday}
+                        />,
+                      )}
                 </View>
                 <View style={large ? null : styles.grow}>
-                  {/* `field("Time") { DatePicker(…).labelsHidden() }`: the same captioned box as Repeat, with the
-                      12-hour pill inside it, not the settings-style caption over a bordered field. */}
-                  {field('Time', <ClockField hourCycle="h12" label="Time" onChange={setTime} testID="shopping-email-time" value={time} variant="pill" />)}
+                  {/* `field("Send time") { DatePicker(…).labelsHidden().accessibilityLabel("Send time") }`: the same
+                      captioned box, with the 12-hour pill inside it. */}
+                  {field('Send time', <ClockField hourCycle="h12" label="Send time" onChange={setTime} testID="shopping-email-time" value={time} variant="pill" />)}
                 </View>
               </View>
               <Text style={[textStyles.subheadline, styles.bold, { color: ink }]}>Preferred pickup time</Text>
@@ -413,22 +464,26 @@ export function EmailScreen({ list }: { list: GroceryList }) {
                   value={pickupStartHour}
                 />,
               )}
-              {note('Pickup repeats weekly from the selected date and is a request for the store to confirm.')}
-              {note('The time follows this timezone, including daylight saving changes. Sending may take a few minutes. A recurring list follows its next shopping trip.')}
+              {note(
+                oneTime
+                  ? 'The list is sent once. The pickup window is a request for the store to confirm.'
+                  : 'The list is sent weekly. The pickup window repeats from the selected date and is a request for the store to confirm.',
+              )}
+              {note('Send and pickup times follow the selected timezone. Sending may take a few minutes.')}
             </>,
           )}
 
-          {/* `permissionCard` (:206-218). */}
+          {/* `permissionCard` (:229-241). */}
           {card(
             'Permission',
-            'Allow NexDo to email this list automatically each week.',
+            oneTime ? 'Allow NexDo to send this list once.' : 'Allow NexDo to email this list each week.',
             'shield',
             <>
               <View style={styles.toggle}>
-                <Text style={[textStyles.subheadline, styles.grow, { color: ink }]}>Authorize weekly emails to this recipient</Text>
-                <Switch accessibilityLabel="Authorize weekly emails to this recipient" onValueChange={setConsent} testID="shopping-email-permission" trackColor={{ true: '#007AFF' }} value={consent} />
+                <Text style={[textStyles.subheadline, styles.grow, { color: ink }]}>{oneTime ? 'Authorize one email to this recipient' : 'Authorize weekly emails to this recipient'}</Text>
+                <Switch accessibilityLabel={oneTime ? 'Authorize one email to this recipient' : 'Authorize weekly emails to this recipient'} onValueChange={setConsent} testID="shopping-email-permission" trackColor={{ true: '#007AFF' }} value={consent} />
               </View>
-              {note('Saving replaces the schedule. Pause future emails below. An email already submitted cannot be recalled.')}
+              {note('Saving replaces the schedule. You can pause it before the email is submitted.')}
               {blocker ? (
                 <>
                   <Text style={[styles.caption, { color: muted }]} testID="shopping-email-blocker">
@@ -444,18 +499,18 @@ export function EmailScreen({ list }: { list: GroceryList }) {
             </>,
           )}
 
-          {/* `statusCard(_:)` (:220-231). */}
+          {/* `statusCard(_:)` (:243-258). */}
           {schedule
             ? card(
                 'Schedule status',
-                schedule.enabled ? 'Your weekly emails are active.' : 'Your weekly emails are paused.',
+                status?.oneTime ? 'One-time email' : 'Weekly email',
                 'check',
                 <View style={[styles.status, { backgroundColor: withAlpha('#34C759', 0.07) }]} testID="shopping-email-status">
                   <View style={styles.inline}>
-                    <Ionicons color={schedule.enabled ? '#00805C' : muted} name={schedule.enabled ? 'ellipse' : 'pause-circle-outline'} size={14} />
-                    <Text style={[textStyles.subheadline, styles.semibold, { color: schedule.enabled ? '#00805C' : muted }]}>{schedule.enabled ? 'Active' : 'Paused'}</Text>
+                    <Ionicons color={schedule.enabled ? '#00805C' : muted} name={schedule.enabled ? 'ellipse' : status?.finished ? 'checkmark-circle-outline' : 'pause-circle-outline'} size={14} />
+                    <Text style={[textStyles.subheadline, styles.semibold, { color: schedule.enabled ? '#00805C' : muted }]}>{status?.state}</Text>
                   </View>
-                  {schedule.enabled ? <Text style={[styles.caption, { color: muted }]}>{`Next run: ${displayDate(schedule.nextRunAt, savedZone)}`}</Text> : null}
+                  {schedule.enabled && schedule.oneTimeQueued !== true ? <Text style={[styles.caption, { color: muted }]}>{`Next run: ${displayDate(schedule.nextRunAt, savedZone)}`}</Text> : null}
                   <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
                   <View style={styles.inline}>
                     <Ionicons color={ink} name="mail-outline" size={15} />
@@ -475,7 +530,7 @@ export function EmailScreen({ list }: { list: GroceryList }) {
           {/* `actions` (:233-251). */}
           <View style={[large ? styles.column12 : styles.row12]}>
             {schedule?.enabled ? (
-              <Pressable accessibilityLabel="Pause weekly emails" accessibilityRole="button" onPress={() => void change(() => shoppingEmailApi.pause(list.id))} style={[styles.action, { backgroundColor: '#FFE6ED' }]} testID="shopping-email-pause">
+              <Pressable accessibilityLabel="Pause scheduled email" accessibilityRole="button" onPress={() => void change(() => shoppingEmailApi.pause(list.id))} style={[styles.action, { backgroundColor: '#FFE6ED' }]} testID="shopping-email-pause">
                 <Ionicons color="#D91440" name="pause" size={15} />
                 <Text style={[textStyles.subheadline, styles.bold, { color: '#D91440' }]}>Pause emails</Text>
               </Pressable>

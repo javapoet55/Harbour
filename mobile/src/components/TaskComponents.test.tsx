@@ -145,16 +145,16 @@ describe('TaskTabs', () => {
   it('marks the selected tab and draws it on the accent gradient', async () => {
     await render(<TaskTabs projects={false} onChange={jest.fn()} />);
     expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(true);
-    expect(screen.getByTestId('segment-Projects').props.accessibilityState.selected).toBe(false);
+    expect(screen.getByTestId('segment-Folders').props.accessibilityState.selected).toBe(false);
     expect(screen.getByTestId('segment-Tasks-selected')).toBeTruthy();
-    expect(screen.queryByTestId('segment-Projects-selected')).toBeNull();
+    expect(screen.queryByTestId('segment-Folders-selected')).toBeNull();
     expect(StyleSheet.flatten(screen.getByText('Tasks').props.style)).toMatchObject({ color: '#FFFFFF', fontSize: 15, fontWeight: '600' });
   });
 
   it('reports the chosen tab', async () => {
     const onChange = jest.fn();
     await render(<TaskTabs projects={false} onChange={onChange} />);
-    await fireEvent.press(screen.getByTestId('segment-Projects'));
+    await fireEvent.press(screen.getByTestId('segment-Folders'));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 

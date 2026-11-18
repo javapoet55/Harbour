@@ -11,7 +11,7 @@ import { Text } from './Text';
 /**
  * Port of `ProjectAssignmentField` (ios/App/ProjectsView.swift:295-315).
  *
- * Swift uses a `Menu` whose items are "No project" followed by every project sorted by NAME (not by
+ * Swift uses a `Menu` whose items are "No Named Folder" followed by every folder sorted by NAME (not by
  * the list's current sort). React Native has no menu primitive, so the same options render as an
  * inline list that opens under the field — the pattern the sort control on the projects list uses too.
  */
@@ -33,15 +33,15 @@ export function ProjectAssignmentField({
 
   const options = projectResults(projects.data?.projects ?? [], '', 'Name');
   const selected = options.find((project) => project.id === projectID);
-  // `selected?.name ?? (projectID == nil ? "No project" : "Assigned project")` — a project the list
-  // has not loaded yet still shows as assigned rather than silently reading "No project".
-  const label = selected?.name ?? (projectID === null ? 'No project' : 'Assigned project');
+  // `selected?.name ?? (projectID == nil ? "No Named Folder" : "Assigned folder")` (2991151) — a folder the
+  // list has not loaded yet still shows as assigned rather than silently reading "No Named Folder".
+  const label = selected?.name ?? (projectID === null ? 'No Named Folder' : 'Assigned folder');
 
   return (
     <View style={styles.wrapper}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Project"
+        accessibilityLabel="Folder"
         accessibilityValue={{ text: label }}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen((value) => !value)}
@@ -60,7 +60,7 @@ export function ProjectAssignmentField({
         <View style={[styles.menu, surface, androidField(theme, false, { raised }), styles.androidMenu]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="No project"
+            accessibilityLabel="No Named Folder"
             accessibilityState={{ selected: projectID === null }}
             onPress={() => {
               onChange(null);
@@ -70,7 +70,7 @@ export function ProjectAssignmentField({
             style={styles.option}
           >
             <TaskSymbol name="folder" size={17} color={theme.colors.secondary} />
-            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>No project</Text>
+            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>No Named Folder</Text>
             {projectID === null ? <Text style={[theme.typography.body, { color: accent }]}>✓</Text> : null}
           </Pressable>
 
@@ -100,15 +100,15 @@ export function ProjectAssignmentField({
 
       {projects.isError ? (
         <View style={styles.status}>
-          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Couldn’t load your projects.</Text>
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Couldn’t refresh folders. Check your connection and try again.</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Retry projects"
+            accessibilityLabel="Retry folders"
             onPress={() => void projects.refetch()}
             style={styles.retry}
             testID="project-field-retry"
           >
-            <Text style={[theme.typography.body, { color: accent }]}>Retry projects</Text>
+            <Text style={[theme.typography.body, { color: accent }]}>Retry folders</Text>
           </Pressable>
         </View>
       ) : null}
@@ -116,7 +116,7 @@ export function ProjectAssignmentField({
       {projects.isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator size="small" />
-          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Loading projects…</Text>
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Loading folders…</Text>
         </View>
       ) : null}
     </View>

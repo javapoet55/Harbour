@@ -77,7 +77,9 @@ describe('Task creation editor', () => {
 
     expect(screen.getByText('TASK NAME')).toBeTruthy();
     expect(screen.getByText('NOTES')).toBeTruthy();
-    expect(screen.getByText('PROJECT')).toBeTruthy();
+    // 2991151: FOLDER (RootView.swift:2283).
+    expect(screen.getByText('FOLDER')).toBeTruthy();
+    expect(screen.queryByText('PROJECT')).toBeNull();
     expect(screen.getByText('DATE')).toBeTruthy();
     expect(screen.getByText('TIME ESTIMATE')).toBeTruthy();
     // Swift's creation form has no priority, energy, tags or recurrence.
@@ -164,14 +166,15 @@ describe('Task creation editor', () => {
     expect(body.startAt).toBe('2026-09-17T03:30:00.000Z');
   });
 
-  it('steps the custom estimate by 5, bounded to 5–480', async () => {
+  it('steps the custom estimate by 5, bounded to 5–480, in the Custom estimate sheet (9e82c95)', async () => {
     await renderEditor();
+    await fireEvent.press(screen.getByTestId('duration-custom'));
 
     await fireEvent.press(screen.getByTestId('duration-increase'));
-    await waitFor(() => expect(screen.getByText('35 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('35 minutes')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('duration-decrease'));
-    await waitFor(() => expect(screen.getByText('30 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('30 minutes')).toBeTruthy());
   });
 
   it('closes on success', async () => {
@@ -250,6 +253,14 @@ describe('Create New Task: Add task by voice', () => {
     expect(mockPush).toHaveBeenCalledWith('/task/voice-capture');
     await fireEvent.press(mic);
     expect(mockPush).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens voice in the folder chosen in the form (08a64da)', async () => {
+    mockParams.mockReturnValue({ projectId: 'p1' });
+    await renderEditor();
+    await fireEvent.press(screen.getByTestId('task-editor-voice'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/task/voice-capture', params: { projectId: 'p1' } });
+    mockParams.mockReturnValue({});
   });
 
   it('is disabled while the task is being created', async () => {

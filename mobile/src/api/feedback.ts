@@ -27,6 +27,30 @@ export const feedbackApi = {
  * 5 new reports a day); 500 "Request failed." when no free reference is found in 20 tries.
  * `bugFailureMessage` turns these into what the form shows.
  */
+/** `BugReportStatus` (Sources/NexdoCore/BugReport.swift:24-33): the two lists the history shows. */
+export type BugReportStatus = 'open' | 'closed';
+
+/** `SubmittedBugReport` (:53-60). `detailedStatus` is the admin's workflow state (a61b01a), kept as sent. */
+export type SubmittedBugReport = {
+  id: string;
+  reference: string;
+  description: string;
+  createdAt: string;
+  status: BugReportStatus;
+  detailedStatus?: string | null;
+};
+
+/** `BugReportHistoryPage` (:62-65). */
+export type BugReportHistoryPage = { reports: SubmittedBugReport[]; nextCursor: string | null };
+
 export const bugReportApi = {
   submit: (input: BugReportInput, client: ApiClient = getApi()) => client.post<BugReportReceipt>('/api/feedback/bugs', input),
+  /**
+   * `GET /api/feedback/bugs?status=open|closed[&cursor=…]` (src/app/api/feedback/bugs/route.ts:12-45), as
+   * `AppModel.bugReportHistory` (NexdoApp.swift:898-905, fbe38a9): 50 of the account's unexpired reports, newest
+   * first, and the cursor for the next 50. "closed" holds `not_applicable` and `closed`; everything else is open.
+   * 400 "Invalid bug report history request." for a bad status or cursor.
+   */
+  history: (status: BugReportStatus, cursor?: string, client: ApiClient = getApi()) =>
+    client.get<BugReportHistoryPage>(`/api/feedback/bugs?status=${status}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
 };

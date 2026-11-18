@@ -9,7 +9,7 @@ import { Text } from './Text';
 /**
  * Port of `ProjectEditorView` (ios/App/ProjectsView.swift:112-171).
  *
- * A `Form` with a "Project name" section, a "Color" grid, an error section and a saving indicator.
+ * A `Form` with a "Folder name" section (2991151), a "Color" grid, an error section and a saving indicator.
  * The colour grid is `Set(palette + [color]).sorted()`, so a project saved with a colour outside the
  * palette keeps its own swatch in the grid rather than losing it on the next edit.
  */
@@ -37,10 +37,10 @@ export function ProjectEditorForm({
 
   return (
     <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
-      <Section title="Project name">
+      <Section title="Folder name">
         <View style={styles.row}>
           <TextInput
-            accessibilityLabel="Project name"
+            accessibilityLabel="Folder name"
             placeholder="Name"
             placeholderTextColor={theme.colors.secondary}
             value={name}
@@ -106,7 +106,7 @@ export function ProjectEditorForm({
       {saving ? (
         <View style={styles.saving}>
           <ActivityIndicator />
-          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving project…</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving folder…</Text>
         </View>
       ) : null}
     </KeyboardAwareScrollView>
@@ -117,7 +117,7 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
   const theme = useTheme();
   return (
     <View style={[styles.section, isAndroid() && styles.androidSection]}>
-      {/* iOS 26 no longer uppercases a `Form` section header — `Section("Project name")` renders as
+      {/* iOS 26 no longer uppercases a `Form` section header — `Section("Folder name")` renders as
           written. Uppercasing it is the pre-iOS-15 behaviour. Android draws the one shared field
           label, which is uppercase (docs/android-polish.md §4). */}
       {title ? (

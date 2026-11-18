@@ -1,12 +1,12 @@
 /**
- * What a Daily Brief section page calls back into Ask with. Swift passes `ask` and `read` closures
- * into `BriefSectionDetailView` (DailyBriefView.swift:106-111); a route cannot take closures, so the
+ * What a Daily Brief section page calls back into Ask with. Swift passes `ask` and `stopVoiceReply` closures
+ * into `BriefSectionDetailView` (DailyBriefView.swift:110-113, 04fa8d8); a route cannot take closures, so the
  * open `AskNexdoView` registers its own here while it is mounted.
  */
 export type BriefHandlers = {
   ask: (query: string) => void;
-  /** Answers the message when reading cannot start (OpenAI sharing off), for the page to show; else `null`. */
-  read: (index: number, text: string) => string | null;
+  /** `stopSpeech` (AskNexdoView.swift:238): the page reads on the phone, after Ask's voice reply stops. */
+  stopVoiceReply: () => void;
 };
 
 let current: BriefHandlers | null = null;

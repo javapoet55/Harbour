@@ -21,6 +21,11 @@ describe('task stack', () => {
     expect(mockScreens.find((screen) => screen.name === 'new')?.options?.title).toBe('Create New Task');
   });
 
+  it('shows no bar on Create New Task: the screen draws Close, the heading and the mic (9e82c95, RootView.swift:2346-2387)', async () => {
+    await render(<TaskLayout />);
+    expect(mockScreens.find((screen) => screen.name === 'new')?.options?.headerShown).toBe(false);
+  });
+
   it('shows no bar on Task Details: the screen’s own header has the title and the xmark (RootView.swift:2014)', async () => {
     await render(<TaskLayout />);
     expect(mockScreens.find((screen) => screen.name === '[id]')?.options?.headerShown).toBe(false);

@@ -65,6 +65,7 @@ export function useVoiceSession({
   enabled,
   onClose,
   foodContext,
+  projectId,
 }: {
   scope: VoiceScope;
   /** The two products a food conversation compares, sent with the session (NexdoApp.swift:539). */
@@ -72,6 +73,8 @@ export function useVoiceSession({
   /** False until consent has been given, which is when Swift calls `start()`. */
   enabled: boolean;
   onClose: () => void;
+  /** 08a64da: the folder new tasks and reminders go into (`VoiceSessionResources(projectID:)`). */
+  projectId?: string;
 }): UseVoiceSession {
   const queryClient = useQueryClient();
   const profile = useSession((current) => current.profile);
@@ -87,6 +90,8 @@ export function useVoiceSession({
   const transport = useRef<WebRtcTransport | null>(null);
   const meter = useRef<VoiceUsageMeter | null>(null);
   const food = useRef(foodContext);
+  // Fixed for the screen's lifetime, as Swift's `@StateObject` resources are.
+  const folder = useRef(projectId);
   // `start()` for the session the effect below owns; replaced each time it builds one.
   const starter = useRef<() => void>(() => undefined);
   const closer = useRef(onClose);
@@ -110,6 +115,7 @@ export function useVoiceSession({
       uuid: randomUUID,
       consent: () => ({ ai: useConsent.getState().ai, voice: useConsent.getState().voice }),
       currentOwnerId: () => useSession.getState().profile?.id,
+      projectId: folder.current,
     });
     const peer = new WebRtcTransport({
       driver: createNativeDriver(),
@@ -117,6 +123,9 @@ export function useVoiceSession({
     });
     // `usageSessionID=UUID()` and `voice.onTelemetry` (AddTaskByVoiceView.swift:38, `:125`): one usage
     // session per conversation, reported once more when the conversation closes.
+    // Set by teardown. 4fa8e21 clears `voice.onClose` before closing (AddTaskByVoiceView.swift:267), because the
+    // close lands a tick later (`closeAfterReleasingAudio`) and must not dismiss the next screen.
+    let unmounted = false;
     const usage = new VoiceUsageMeter({
       sessionId: randomUUID().toUpperCase(),
       record: (sessionId, durationSeconds) => recordVoiceUsage(queryClient, sessionId, durationSeconds),
@@ -126,7 +135,9 @@ export function useVoiceSession({
       executor: tools,
       uuid: randomUUID,
       onState: setState,
-      onClose: () => closer.current(),
+      onClose: () => {
+        if (!unmounted) closer.current();
+      },
       onTelemetry: () => usage.finish(),
     });
 
@@ -139,7 +150,6 @@ export function useVoiceSession({
     // ask for a credential and connect. `guard !starting, voice.phase == .idle`, so a second tap of Start
     // listening cannot open a second session. Deferred by a microtask so the flags are not written during
     // this effect's own commit.
-    let unmounted = false;
     let startingNow = false;
     const start = async () => {
       await Promise.resolve();

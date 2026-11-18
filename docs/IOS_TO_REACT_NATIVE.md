@@ -3640,3 +3640,137 @@ New or changed in `3b7e5c2..35c86e3` (`src/`, `prisma/`, `public/`). `jsonError`
 - **Nothing else was saved, sent or called.** No new "Parity …" items were needed. List Settings for "Parity
   Weekly Groceries" was closed without saving (still 0 added · 7 items). The module guides now count as seen
   for this sign-in, which is local only. The app is still signed in on the simulator.
+
+## 25. Phase 15 status
+
+Phase 15 runs on `rn-phase-15`, cut from `origin/develop` at `2932784` (develop synced with main's Nov 15–16
+team commits). It ports to Android the Swift changes made since Phase 14. Scope: `git log 35c86e3..origin/develop
+-- ios/` (Phase 14 was cut at `35c86e3`). That is 10 non-merge commits, all by the team on 2026-11-15/16, with no
+dev/prod duplicates. Every changed Swift file was read in full, along with the matching `src/` and `prisma/`
+changes in the same range. Line numbers are as of `origin/develop` at `2932784`. Paths are relative to `ios/App/`
+unless they start with `Sources/`, `Tests/`, `src/`, `prisma/`, `admin/` or `mobile/`. **No captures were taken**
+(this is a Windows pass with no simulator). Rows are built from the Swift source.
+
+**Unmerged branches.** `git branch -r --no-merged origin/develop` lists 11 branches: ten `devin/…` branches
+(2026-10-03…10-05) and `ios-build-2026-10-12`. **None has an `ios/` commit after 2026-10-30.** The newest tip is
+Oct 12, so no team module is waiting outside develop.
+
+**Totals: 9 inventory rows (1 new screen, 7 changed screens, 1 with no screen). 1 row was already done on
+Android. 1 row needed a new native module (`expo-speech`, approved and added 2026-11-18). 0 new permissions.**
+
+### Navigation changes
+
+1. **Account → Report Bugs** (`BugReportView.swift:22`, `:30`, `:59`): opened from Settings (diagnostics screen
+   `settings`), the report now opens on **Report Bugs** history: an Open / Closed segmented picker, the account's
+   reports and the shake toggle. **Report Bug** opens the form. **Done** after sending returns to the history
+   (Open) instead of closing (`:42-49`). Opened by a shake or from any other screen, it is unchanged (introduction
+   first).
+2. **Create New Task** (`RootView.swift:2262-2387`): the navigation bar is hidden. The screen draws its own header,
+   with a **Close** capsule, the centred "Create New Task" heading and a gradient microphone. The custom estimate
+   moves from an inline stepper into a **Custom estimate** sheet (`:2448-2461`, medium detent).
+3. **Add by Voice consent** (`AddTaskByVoiceView.swift:143-149`, `:304-324`): the consent **alert** is now an
+   inline card on the voice screen. **Not now** closes the screen; **Allow and start** starts the session.
+4. **Tasks → Folders** (`RootView.swift:1848`): the second tab is titled **Folders**. The destination is unchanged.
+
+### Screen inventory
+
+Tick the box when the RN screen lands, with the commit that built it. "RN owner" is the file that owns the screen
+today.
+
+| Built | Screen | Swift file:line | New / changed | What is new or changed | RN owner | Endpoints |
+| --- | --- | --- | --- | --- | --- | --- |
+| [x] `e47b9e9` (main, merged in `2932784`) | Module guides: primary button | `WellnessModuleGuide.swift:91`; `Tests/MomentUITests/WellnessMenuUITests.swift` | **changed** (`9b8062d`) | The pinned primary button reads **Continue** (was "Got it!"), with the accessibility label to match, on all four guides | `mobile/src/features/wellness/WellnessModuleGuide.tsx` | — |
+| [x] `21398aa` | Tasks: Projects renamed to Folders | `RootView.swift:1848`, `:2283`; `ProjectsView.swift:24-60`, `:87`, `:129-146`, `:201-277`, `:303-313`; `TaskDetailsView.swift:224`; `NexdoApp.swift:953` | **changed** (`2991151`) | Every visible "project" in the Folders tab, the folder card hint, the folder editor ("Folder name", "New Folder" / "Edit Folder", "Saving folder…"), the folder detail (menu, delete dialog, "Folder unavailable"), the assignment field ("No Named Folder", "Assigned folder", "Retry folders", "Loading folders…"), Create New Task's **FOLDER** label, the business-research Task Details caption "Folder", and the refresh error "Couldn’t refresh folders. Check your connection and try again.". The unassigned folder is **No Named Folder**. Not renamed in Swift: Task Details' normal **PROJECT** field (`TaskDetailsView.swift:55`) and the Help topic (Swift bug 3) | `src/components/TaskListParts.tsx`, `ProjectsList.tsx`, `ProjectParts.tsx`, `ProjectEditorForm.tsx`, `ProjectAssignmentField.tsx`; `app/(tabs)/(tasks)/project/[id]/index.tsx`, `edit.tsx`, `_layout.tsx`; `app/task/new.tsx:234`; `app/task/[id].tsx:409`. RN still says "No project", a stale port (Swift has said "No Named Project" since `7919779`, 2026-09-24) | — |
+| [x] `f4351b6` | Create New Task: voice keeps the selected folder | `RootView.swift:2333`; `AddTaskByVoiceView.swift:37-64`; `VoiceToolExecutor.swift:11-13`, `:41`; `NexdoApp.swift:609-630` (`:613-615`) | **changed** (`08a64da`) | The editor's microphone opens voice with the folder currently chosen in the form. `create_task` and `create_reminder` calls then carry a top-level `projectId` (never inside `arguments`). No other voice entry passes a folder | `app/task/new.tsx` (`TaskEditorVoiceButton`), `app/task/voice-capture.tsx`, `src/components/AddTaskByVoiceView.tsx`, `src/voice/useVoiceSession.ts`, `src/voice/toolExecutor.ts`. **Not ported**: the mic pushes `/task/voice-capture` with no folder | `POST /api/realtime/tool` (`projectId` added) |
+| [x] `612f9b0` | Create New Task: layout polish | `RootView.swift:2262-2344` (form), `:2346-2359` (header), `:2361-2387` (Close + mic), `:2389-2422` (notes row), `:2424-2462` (estimate + sheet), `:2613-2636` (styles), `:2649-2653` | **changed** (`9e82c95`) | Own header: **Close** capsule (accent text, card fill, hairline), heading "Create New Task", 44-pt mic on `voiceGradient` with two halo rings. TASK NAME icon `list.bullet`, and the placeholder no longer clears on focus. The card is 24 radius with 18 padding; spacing scales with height (14–23). NOTES is a button row with a trailing chevron (right / down). TIME ESTIMATE has a trailing **Custom** button (or "35m" when a non-preset is chosen) that opens a **Custom estimate** sheet ("N minutes" stepper, 5–480 step 5, **Done**). The preset chips are labelled "N minutes" for accessibility. **Create Task** is always on `actionGradient` (purple, top→bottom), bold, at 0.88 opacity when it can't save. The bar is `.ultraThinMaterial`. Inputs use `systemGray6` | `app/task/new.tsx`. Android keeps its §3/§4/§24 field, label and chip deviations (`mobile/docs/android-polish.md`) | — |
+| [x] `6e11f42` | Report Bugs: open and closed reports | `BugReportView.swift:21-22`, `:30`, `:40-59`, `:92-112`, `:229-303`; `Sources/NexdoCore/BugReport.swift:24-65`; `NexdoApp.swift:898-905` | **new** view (`fbe38a9`, `a61b01a`) | From Settings only: segmented **Open / Closed**, then each report's description, status label (`detailedStatus` title: Open, In Progress, Future, Not Applicable, Closed; else Open/Closed) with `circle` / `checkmark.circle`, "Submitted {abbreviated date}" and the monospaced reference. Empty: "No open bug reports." / "No closed bug reports.". "Loading reports…", **Refresh reports** (or **Retry** after a failed first load) and **Load more reports** (cursor). Errors: signed out → "Your session has expired. Sign in again to view your reports."; 404/405 → "Report history is unavailable on this server."; else "Couldn’t load your bug reports. Try again.". The title is "Report Bugs". The shake toggle moves below the list | `mobile/src/features/bugReport/BugReportScreen.tsx`, `src/api/feedback.ts`; opened tagged `settings` from `app/account/index.tsx:147` | `GET /api/feedback/bugs?status=open\|closed&cursor=` (**new**) |
+| [x] `ff1b226` | Share List: email one time by default | `ShoppingEmailView.swift:4-16`, `:42-52`, `:63`, `:124-142`, `:161`, `:165-215`, `:229-241`, `:243-258`, `:268`, `:320-330`, `:340-368` | **changed** (`d471768`) | Segmented **One Time** (default) / **Repeat**; changing it turns permission off. One Time shows **Send date** (default tomorrow); Repeat shows **Repeat weekly on**. The time field is "Send time". Pickup defaults to tomorrow, 11 AM–12 PM. "SHOPPING LIST EMAIL" and the "weekly" wording is gone from the copy (intro, list subtitle, tip, the notes, permission card and toggle, status subtitle "One-time email" / "Weekly email", "Pause scheduled email", "Scheduled email is not enabled on this server yet."). New blocker "One-time scheduling is unavailable on this server." when `supportsOneTime` is not true. Status: **Finished** (`checkmark.circle`) for a sent one-time email, and no "Next run" once it is queued. A loaded schedule picks the frequency from `sendDate`. Save sends `sendDate` (yyyy-MM-dd or null) | `mobile/src/features/shopping/EmailScreen.tsx`, `src/api/shopping.ts:180-210` | `GET`/`POST /api/shopping/email-schedule` (`sendDate`, `oneTimeQueued`, `supportsOneTime`) |
+| [x] `57dea34` | Add by Voice: first-time startup | `AddTaskByVoiceView.swift:85`, `:111`, `:143-158`, `:194`, `:227-236`, `:263-271`, `:283-299`, `:304-324`, `:347-358`; `Tests/MomentUITests/VoiceStartupUITests.swift` | **changed** (`4fa8e21`) | The consent alert becomes an inline card (title, body, **Allow and start**, **Not now**), shown instead of **Start listening** while consent is missing. Startup runs only on a request (appear, Allow, Start listening, Try again), never without consent, and re-checks the owner after each await. `onClose` is cleared before the screen's own close, so a closed screen cannot dismiss the next one. Speaker is disabled without consent. Audio notifications move to the main queue | `src/components/AddTaskByVoiceView.tsx` (`Alert.alert` at `:85-101`), `src/voice/useVoiceSession.ts:129`, `:184-193`. The cleanup's `conversation.close()` still calls `onClose` → `router.back()` one tick later. RN has no Speaker button and no AVAudioSession, so those two parts do not apply | `POST /api/realtime/task-session` |
+| [x] "Phase 15 / 7" (`expo-speech`) | Briefing section: on-device Read aloud | `BriefSectionDetailView.swift:7`, `:11-12`, `:44-54`, `:67`, `:87-88`, `:95-104`, `:196-255`; `DailyBriefView.swift:28-29`, `:73`, `:110-113`; `AskNexdoView.swift:238` | **changed** (`04fa8d8`) | Read aloud in a briefing section uses `AVSpeechSynthesizer` on the device (`.playback` / `.spokenAudio`, app voice volume), not the OpenAI voice reply. The menu toggles **Read aloud** / **Stop reading**, disabled when the section is empty. It is gated on spoken replies ("Enable spoken replies in Settings to use Read aloud."), not on OpenAI sharing. It stops on leaving or backgrounding and shows its own error ("Nexdo couldn’t start reading this briefing. Try again."). Answers outside the briefing still use the server voice | `src/features/ask/BriefSectionDetail.tsx:66-93`, `src/components/AskNexdoView.tsx:135` (server voice) | none (was `POST /api/speech`) |
+| [x] nothing to build | Build number | `Nexdo.xcodeproj/project.pbxproj` | **no screen** (`61f8d7a`) | `CURRENT_PROJECT_VERSION` 11 → 12. RN stays `1.0.0-rc.1` (`mobile/app.config.ts:28`); `versionCode` is remote (EAS) | — | — |
+
+**All 9 rows are done on Android** (2026-11-18): seven built on `rn-phase-15` (one commit each, from the Swift
+source; deviations in `mobile/docs/android-polish.md` §71.1–§71.7) and the Continue label from `e47b9e9`. The
+build number needs nothing. On-device Read aloud ("Phase 15 / 7") was approved on 2026-11-18 and adds
+`expo-speech` (Android `TextToSpeech`), so it needs a native build.
+
+Android is ahead of Swift on bug 8 (an unknown bug status falls back to Open/Closed). Bugs 1 and 10 are kept, as
+Swift has them. Bug 2 does not arise (Android draws its own field surface). Bugs 3 and 7 are followed as Swift has
+them (Task Details' PROJECT, the Help topic, the 9 AM fallback). Add by Voice's row also fixes an **Android-only**
+double `router.back()` on Close, idle Done and teardown (§71.3).
+
+`a61b01a`'s admin table (status select, autosave) is admin-only and has no app screen; its app side (`detailedStatus`)
+is in the Report Bugs row.
+
+### Server endpoints
+
+New or changed in `35c86e3..2932784` (`src/`, `prisma/`), as far as the app uses them. Admin-only routes
+(`/api/admin/feedback/bugs` PATCH/autosave, `/api/admin/qr-analytics`, the Overview/Users analytics) and the QR
+landing page's `POST /api/telemetry/qr-open` (bearer token, not called by either app) are left out.
+
+| Feature | Method + path | Request | Response and errors | Server | Swift | RN |
+| --- | --- | --- | --- | --- | --- | --- |
+| Bug report history (**new**) | `GET /api/feedback/bugs?status=open\|closed[&cursor=<ISO>,<uuid>]` | signed in | 200 `{ reports: [{ id, reference, description, createdAt, status, detailedStatus }], nextCursor \| null }`, 50 per page, newest first, `private, no-store`; only reports still inside their 90-day expiry. "closed" = `not_applicable` or `closed`; "open" = everything else. 400 "Invalid bug report history request." | `src/app/api/feedback/bugs/route.ts:12-45`; `src/server/feedback/bug-status.ts`; migrations `20261115010000_bug_report_status` (`closedAt`), `20261115020000_bug_report_workflow` (`status`, default `open`) | `NexdoApp.swift:898-905`; `BugReportView.swift:278-302` | **missing** |
+| Voice tool folder | `POST /api/realtime/tool` | adds optional `projectId` (1–100 chars), top level | 400 "A folder can only be assigned when creating a task or reminder." for any other tool or a food/calendar scope. An unowned folder gives 200 `{ success: false, error: "The selected folder is unavailable. No task was saved. …" }`. The created task now returns `projectId` | `src/app/api/realtime/tool/route.ts:8`, `:18-20`, `:31`; `src/server/voice/tools.ts:42`, `:115-127`, `:187` | `NexdoApp.swift:613-615` | **missing** (`src/voice/toolExecutor.ts:107-111`) |
+| Shopping email one time | `GET`/`POST /api/shopping/email-schedule` | `save` input adds `sendDate` (yyyy-MM-dd, nullable) | snapshot adds `supportsOneTime: true`; schedule adds `sendDate`, `oneTimeQueued`. A one-time save must be in the future and exist in the zone ("Choose a future send date and time that exists in the selected timezone."), and the pickup must start after the send ("Choose a pickup window that starts after the send time."). The send is queued once and the schedule is disabled after delivery. Finishing the trip disables a one-time schedule and cancels its pending run. 503 text is now "Scheduled shopping email is not enabled on this server." | `src/server/shopping/email-domain.ts:9`, `:16-20`; `email-service.ts:18`, `:26-43`, `:71-75`, `:113`, `:123-125`; `service.ts:51-54`; migration `20261115030000_shopping_email_one_time` | `ShoppingEmailView.swift:340-368` | **missing** |
+| Login device | `POST /api/auth/login` | unchanged | unchanged; stores `device:login` = `Android` / `iPhone` from the User-Agent | `src/app/api/auth/login/route.ts:21-28`; `src/server/account-device.ts:2-7` | — | see Server issue 1 |
+
+### Native requirements
+
+| Need | Swift | RN today | Action |
+| --- | --- | --- | --- |
+| **On-device text to speech** (Read aloud) | `AVSpeechSynthesizer` + `AVAudioSession` `.playback`/`.spokenAudio` | was not installed (`expo-audio` plays server audio only) | **Added (approved 2026-11-18):** `expo-speech ~57.0.3`. A native rebuild is needed. No permission: its manifest only adds a `<queries>` entry for the `TTS_SERVICE` intent (package visibility). Android speaks at most 4,000 characters per utterance, so longer sections are queued in parts |
+| Folder in voice | — | — | none (JS only) |
+| Bug history, shopping one time, Create New Task, consent card | — | — | none |
+
+**No new permission, Info.plist key or entitlement** was added in this range.
+
+### Unmounted, DEBUG-only and no-op code (not to be built)
+
+| Item | Where | Why |
+| --- | --- | --- |
+| `-voice-startup-test` | `RootView.swift:338-340`; `ProjectsPreview.swift:36-38` (503 fixture for `/api/realtime/task-session`) | DEBUG harness for `VoiceStartupUITests`. The sample calendar is still Los Angeles (`RootView.swift:342`) |
+| Voice / editor previews without a folder | `RootView.swift:326-329` | DEBUG; `AddTaskByVoiceView()` and `TaskEditor(task: nil)` without `projectID` |
+| Brief previews | `RootView.swift:46-66`; `DailyBriefView.swift:105-107` (`-open-brief-detail`) | DEBUG paths into the 04fa8d8 detail view |
+| Briefing `ReadAloudError` and `stopVoiceReply` | `DailyBriefView.swift:73`, `:113` → `BriefSectionDetailView.swift:100` | Effectively unreachable: nothing in briefing mode calls `speakAnswer`, and `request()` clears both errors first (Swift bug 6) |
+| `speakResponse: true` | `AskNexdoView.swift:446` | No caller passes it, so the automatic spoken reply never runs (pre-existing) |
+| `TaskCreationStyle.selectedGradient` | `RootView.swift:2631-2635` | Still used by the chips (`:2662`) and `CalendarView.swift:834`, so it is not dead |
+| Never referenced | `RootView.swift:2526-2532` (`TaskFilter`), `:2553-2604` (`TasksHero`, `TaskMetric`), `:2680-2692` (`EventRow`), `:1418-1446` (`attentionDetails`) | Defined, never mounted; unrelated to these commits |
+
+### Swift bugs (not fixed)
+
+1. **A disabled Create Task looks enabled** (`RootView.swift:2313-2319`, `:2649-2653`). With an empty title the
+   button keeps white bold text on the full gradient at 0.88 opacity. `TaskCreateButtonStyle` ignores `isEnabled`,
+   so a tap does nothing with no visible reason. The old bar went grey.
+2. **Create New Task's inputs vanish into the card in dark mode** (`RootView.swift:2614-2615`). `systemGray6` and
+   `secondarySystemGroupedBackground` are both #1C1C1E in dark, so the name, notes and unselected chips are drawn
+   by their hairline only. Calendar's event editor shares the style.
+3. **The rename missed two places.** Task Details' normal form still labels the field **PROJECT**
+   (`TaskDetailsView.swift:55`) while its business-research layout says "Folder" (`:224`). The Help topic still
+   says "How do I organize tasks into a project?" / "Use the Projects tab…" (`Sources/NexdoCore/HelpTopics.swift:36`;
+   `src/content/support-articles.json:340-341`).
+4. **The Custom estimate button never shows selection** (`RootView.swift:2429-2436`). A non-preset duration renames
+   it "35m" but gives it no selected style or trait, while the presets do (`:2444`).
+5. **The header title can overlap Close at large, non-accessibility sizes** (plausible; `RootView.swift:2354`). The
+   title is inset a fixed 76 pt, but the Close capsule grows with Dynamic Type.
+6. **The briefing's error banner and stop hook are dead plumbing** after `04fa8d8` (see Unmounted). Read aloud also
+   now means two engines with two gates: on-device and "spoken replies" in a briefing, OpenAI and "Allow OpenAI
+   sharing" everywhere else (`AskNexdoView.swift:467`).
+7. **Pickup falls back to 9 AM, not the new 11 AM default** (`ShoppingEmailView.swift:349` vs `:47`). A saved
+   schedule without a pickup reloads with 9 AM–10 AM.
+8. **One unknown bug status hides the whole history** (`Sources/NexdoCore/BugReport.swift:35-51`, `:59`).
+   `detailedStatus` is a closed `Decodable` enum, so a sixth server status fails the decode of the page ("Couldn’t
+   load your bug reports. Try again.") instead of falling back to Open/Closed.
+9. **`bugReportHistory` skips the owner check** (`NexdoApp.swift:898-905`), unlike the sibling loaders
+   (`:948-952`). It also does not `reset()` on `.signedOut`, so a page that lands after an account switch is shown.
+10. **Voice can duplicate the typed task** (plausible, pre-existing; `RootView.swift:2333`). Voice saves into the
+    folder while the editor sheet stays open with its draft; **Create Task** then makes a second task.
+
+### Server issues (not fixed)
+
+1. `src/app/api/auth/login/route.ts:21` with `src/server/account-device.ts:2-7`: the platform is read from the
+   User-Agent, but neither app sends one that matches. RN's `fetch` on Android sends `okhttp/…` (no custom
+   User-Agent in `mobile/src`), and URLSession sends `Nexdo/… CFNetwork/… Darwin/…` (no custom header in `ios/`). So
+   `device:login` is plausibly never written for app sign-ins, only for a phone browser.
+2. `src/app/api/feedback/bugs/route.ts:37` returns the raw `BugReport.status` as `detailedStatus`, with no
+   allow-list in the response. Any value outside `bugReportStatuses` breaks Swift (bug 8).

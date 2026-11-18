@@ -534,16 +534,13 @@ describe('the Daily Brief', () => {
     expect(screen.queryByTestId('daily-brief')).toBeNull();
   });
 
-  it('tells a section page why it cannot read aloud when OpenAI sharing is off', async () => {
+  // 04fa8d8: a section page reads on the phone itself, so it only asks Ask to stop a voice reply first
+  // (`stopVoiceReply: stopSpeech`, AskNexdoView.swift:238). Ask no longer reads sections for it.
+  it('hands a section page its stopVoiceReply, and no longer a read', async () => {
     await openBrief();
-    await act(async () => {
-      useConsent.setState({ ai: false, voice: false });
-    });
-    let message: string | null | undefined;
-    await act(async () => {
-      message = briefHandlers()?.read(0, 'Send the report by 4 PM.');
-    });
-    expect(message).toBe('Allow OpenAI sharing in Account to use Read aloud.');
+    const handlers = briefHandlers();
+    expect(handlers && Object.keys(handlers).sort()).toEqual(['ask', 'stopVoiceReply']);
+    await act(async () => handlers?.stopVoiceReply());
   });
 
   it('counts items in the section badges, not "nothing" bullets, and hides a zero badge', async () => {

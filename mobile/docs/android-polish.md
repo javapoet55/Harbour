@@ -2935,3 +2935,198 @@ tomorrow.” — **Nexdo**" (was "NexDo"), in `src/features/wellness/WellnessCho
   should go to Swift as well.
 - Tests: `chooser.test.tsx` checks the new spelling.
 - **Phone check:** open Wellness. The quote card ends with "— Nexdo".
+
+## 71. Phase 15: the Swift changes since Phase 14 (2026-11-18)
+
+Built on `rn-phase-15` from `docs/IOS_TO_REACT_NATIVE.md` §25, one commit per row, from the Swift source at
+`2932784`. There are no captures for this phase (a Windows pass), so nothing here is checked against a
+screenshot. The standing rules apply ("phone", not "iPhone"/"iOS"). No earlier deviation is reverted.
+
+### 71.1 Projects are Folders (§25 row 2; 2991151)
+
+Swift's copy, word for word, on the Folders tab (`TaskListParts.tsx`), the list (`ProjectsList.tsx`), the
+editor (`ProjectEditorForm.tsx`, titles in `app/(tabs)/(tasks)/_layout.tsx`), the folder detail and its delete
+alert (`project/[id]/index.tsx`), the card hint (`ProjectParts.tsx`), the assignment field
+(`ProjectAssignmentField.tsx`), Create New Task's **FOLDER** label and the business-research Task Details
+caption "Folder" (`app/task/[id].tsx`).
+
+- **"No project" becomes "No Named Folder".** RN never took Swift's "No Named Project" (Swift has used it since
+  `7919779`, 2026-09-24), so this also closes that older gap. The search that reveals the unassigned card matches
+  "No Named Folder".
+- **The load error is Swift's now:** "Couldn’t refresh folders. Check your connection and try again."
+  (`NexdoApp.swift:953`) on the list and the assignment field. RN's own "Couldn’t load your projects." is gone.
+  Swift's "Showing saved folders." line under it is not added; RN shows the list it has either way.
+- **RN-only copy, renamed to match:** the edit sheet's "Loading folders…" and "This folder is no longer in your
+  list." (Swift's editor never loads, so it has no such state).
+- **Kept as Swift has them:** Task Details' normal **PROJECT** field label (`TaskDetailsView.swift:55`) and the Help
+  topic "How do I organize tasks into a project?" (`HelpTopics.swift:36`). Swift did not rename either (§25 Swift
+  bug 3). When Swift fixes them, RN follows.
+- Test ids (`project-*`, `segment-Folders`) follow the label for the tab only; the other ids are unchanged.
+- Tests: `projects.test.tsx` "Folders (Phase 15, 2991151)" plus the updated assertions in `tasks-screen`,
+  `editor-fields`, `task-editor`, `task-detail-business`, `android-labels`, `TaskComponents` and `projectQuery`.
+- **Phone check:** Tasks → **Folders** tab: "Search Folders", "Folders", "+ New Folder", the "No Named Folder" card.
+  Open a folder → ⋯ shows "Edit folder" / "Delete folder", and Delete asks "Delete this folder?". Create New Task
+  shows FOLDER and "No Named Folder".
+
+### 71.2 Voice from Create New Task keeps the chosen folder (§25 row 3; 08a64da)
+
+`TaskEditorVoiceButton` (`app/task/new.tsx`) passes the folder chosen in the form right now as
+`/task/voice-capture?projectId=…`. `app/task/voice-capture.tsx` hands it to `AddTaskByVoiceView` → `useVoiceSession`
+→ `VoiceToolExecutor`, which adds a top-level `projectId` to `create_task` and `create_reminder` calls only
+(`NexdoApp.swift:613-615`). The `arguments` the model sent are unchanged.
+
+- With no folder chosen, the mic pushes the plain `/task/voice-capture`, as before. No other voice entry (Tasks'
+  Add by Voice, Ask, Calendar, food) passes a folder, as in Swift.
+- The folder is fixed when the voice screen opens (Swift's `@StateObject` resources). Changing the field while
+  voice is open does not move the session.
+- An unowned or deleted folder is the server's to refuse: the model gets "The selected folder is unavailable. No
+  task was saved. …" and says so. RN adds no copy of its own.
+- **Not handled, as in Swift:** the editor stays open with its draft after voice saves into the folder, so
+  Create Task can still make a second task (§25 Swift bug 10).
+- Tests: `toolExecutor.test.ts` "a selected folder", `useVoiceSession.test.tsx` "useVoiceSession folder",
+  `voice-screens.test.tsx` "voice in a folder", `task-editor.test.tsx` "opens voice in the folder chosen in the
+  form".
+- **Phone check:** open a folder → Add task → tap the mic and say "Add review estimates tomorrow at 10". Close
+  voice and the editor. The task is in that folder, not in No Named Folder.
+
+### 71.3 Add by Voice: consent on the screen, and one dismissal (§25 row 7; 4fa8e21)
+
+`src/components/AddTaskByVoiceView.tsx`, `src/voice/useVoiceSession.ts`.
+
+- **The consent alert is now Swift's inline card** (`AddTaskByVoiceView.swift:304-324`): the same title per mode
+  ("Use voice to manage tasks?", "Use voice to add calendar events?", "Ask about food by voice?"), the same body,
+  a filled **Allow and start** and a plain **Not now**. It takes Start listening's place while consent is
+  missing. The card is a light ink wash (5%) at 18 radius where Swift uses `.thinMaterial`, which RN has no
+  equivalent for.
+- **Consent is read live** (`needsConsent`, `:111`). Withdrawing AI or voice consent while the screen is open closes
+  the session (as before) and brings the card back, as Swift does.
+- **ANDROID-ONLY FIX, the reason for this row on Android.** The session reports its close a tick after the
+  teardown (`closeAfterReleasingAudio` → `onClose`), so **Close**, **Done** on an idle screen and leaving the screen
+  each called `router.back()` twice (the tests show both calls). The second would pop the screen underneath, e.g. Create
+  New Task or Today; not yet seen on a phone.
+  Swift clears `voice.onClose` before closing (`:267`), and SwiftUI's `dismiss()` is idempotent anyway. RN now
+  ignores the session's close after unmount, and the screen dismisses at most once.
+- **Not ported, no Android equivalent:** the Speaker button's disabled state (RN has no Speaker button) and moving the
+  AVAudioSession interruption and route notifications onto the main queue (no AVAudioSession).
+- Startup still begins when consent is given or the screen opens with it, and again from Start listening or Try
+  again. The owner re-check after each await was already there (`unmounted`, the executor's owner check).
+- Tests: `voice-screens.test.tsx` (consent card in all three modes, Not now, withdrawn consent, the two
+  dismiss-once cases, the card replacing Start listening), `useVoiceSession.test.tsx` "close after unmount".
+- **Phone check:** turn off OpenAI sharing in Account, then open Tasks → Add by Voice. The card shows on the
+  screen, not as a dialog. Not now goes back once, to Tasks. Turn sharing on, open Create New Task → mic → Close.
+  You are back on Create New Task, not Tasks.
+
+### 71.4 Share List: one email by default (§25 row 6; d471768)
+
+`src/features/shopping/EmailScreen.tsx`, `src/api/shopping.ts`.
+
+- **One Time / Repeat** at the top of the Schedule card, One Time selected. It is the shared `SettingsSegments`, so
+  Android draws it with the §9 segment rules (each segment as wide as its label, accent-tinted selection), not
+  as iOS's equal-width capsule. Changing it turns permission off, as in Swift.
+- One Time shows **Send date** (a date pill, tomorrow by default); Repeat shows **Repeat weekly on**. The time is
+  captioned **Send time** and read as "Send time, …". Pickup defaults to tomorrow, **11 AM – 12 PM**.
+- Swift's new copy word for word: "SHOPPING LIST EMAIL", the intro and tip without "weekly", "Selected list for
+  sharing.", the two pickup notes, the permission card and toggle per frequency, "Saving replaces the schedule. You
+  can pause it before the email is submitted.", "Scheduled email is not enabled on this server yet.", "Pause
+  scheduled email", and the blockers ("Scheduled email is unavailable on this server. …", "One-time scheduling is
+  unavailable on this server.", "Turn on permission to authorize scheduled email.").
+- Status: the subtitle is "One-time email" or "Weekly email". A one-time email that went out is **Finished** (check
+  circle); one cancelled by finishing the trip stays **Paused**. "Next run" is hidden once the email is queued.
+- A saved schedule opens on its own frequency (`sendDate` set → One Time). Save sends `sendDate` (yyyy-MM-dd) or
+  `null`.
+- **Kept as Swift has it:** a saved schedule with no pickup hour reloads at 9 AM, not the new 11 AM default (§25
+  Swift bug 7). Every schedule either app saves has a pickup, so this only reaches old rows.
+- The send date's pill has no spoken label of its own, like the pickup date beside it (both `labelsHidden`).
+- Tests: `email.test.tsx` "Shopping list email" (17 cases, rewritten for one time).
+- **Phone check:** Shopping → a list → Schedule Email. One Time is selected, Send date shows tomorrow, pickup
+  11 AM – 12 PM. Tap Repeat: Repeat weekly on appears and permission turns off. Save a one-time email to a test
+  address. The status card says "One-time email · Active" with no "Next run" after the worker queues it.
+
+### 71.5 Report Bugs from Settings: open and closed reports (§25 row 5; fbe38a9, a61b01a)
+
+`src/features/bugReport/BugReportScreen.tsx`, `model.ts`, `src/api/feedback.ts`.
+
+- Opened from My Page → **Report Bugs** (diagnostics screen `settings`), the first page is now **Report Bugs**:
+  **Open / Closed**, that status's reports, then the shake toggle. **Report Bug** opens the form as before. After
+  sending, **Done** goes back to the history (Open) instead of closing; × still closes. Opened by a shake or from
+  anywhere else, the screen is unchanged (introduction first, Done closes).
+- Each report: the description, the status with `circle` / `checkmark.circle` ("Open", "In Progress", "Future",
+  "Not Applicable", "Closed"), "Submitted Nov 15, 2026" on the phone's clock, and the reference in monospace.
+  "Loading reports…", **Refresh reports** (**Retry** after a failed first load), **Load more reports** from the
+  server's cursor, and Swift's three failure messages.
+- The Open / Closed picker is `SettingsSegments`, so Android draws it with the §9 segment rules.
+- The shake toggle says "Shake **phone** to report a bug" on Android, as the introduction already did (QA M-03).
+- **ANDROID AHEAD of §25 Swift bug 8:** a workflow status this app doesn't know shows as Open or Closed, by list.
+  In Swift it fails the whole page.
+- A page that arrives after the list has gone (status switched, report closed) is dropped, like Swift's `.task`
+  cancellation. Like Swift, there is no separate owner check on the history (§25 Swift bug 9). It is fetched with
+  the current session, so it can only ever be the signed-in account's.
+- Tests: `history.test.tsx` (11 cases: the page, Closed, empty, Load more, Retry, Done back to the history, the
+  unchanged path, the titles, the messages, the request).
+- **Phone check:** My Page → Report Bugs. The page is titled Report Bugs with Open selected and your reports
+  listed. Closed switches the list. Report Bug → send a test report → Done returns to the Open list, with the new
+  report at the top. Shake to open it from another screen: the old introduction shows.
+
+### 71.6 Create New Task: Swift's new header, estimate sheet and Create Task bar (§25 row 4; 9e82c95)
+
+`app/task/new.tsx`, `app/task/_layout.tsx`. The Android field, label, chip and NOTES deviations (§3, §4)
+stay as they are.
+
+- **The stack header is gone** (`headerShown: false`, Swift's `.toolbar(.hidden)`). The screen draws its own:
+  a **Close** capsule (accent text on the card fill with a hairline), "Create New Task" centred as a heading, and
+  the microphone. At large text sizes the heading sits above the two controls. The bar is the surface at 85%,
+  RN's stand-in for `.ultraThinMaterial`. The header pads the status-bar inset itself.
+- **The microphone** is Swift's 44-point disc on `voiceGradient` (#874DF2 → #4D2BD9 → #215CE6) inside two accent
+  halos (16%, 8%). It still dims to 40% while creating (the §59 Android choice). Close now dims the same way. Swift
+  doesn't dim either (§25 Swift bug 1's family), but a control that does nothing should look it.
+- **TIME ESTIMATE** has a trailing **Custom** button ("35m" once a non-preset is chosen; spoken "Custom estimate,
+  35 minutes"). It opens a **Custom estimate** sheet: "N minutes" with − / + (5–480 in 5s; each end disables) and
+  **Done**. The inline stepper is gone. The preset chips are spoken "15 minutes"…"60 minutes". Android keeps its
+  scrolling chip row; Swift stacks the chips vertically only at accessibility sizes, which the chip row already
+  handles by scrolling.
+- **The card** is 24 radius with 18 padding at the sides and top. Its spacing follows the scroll area's height, as
+  Swift's does: 14 at 520 pt or less, up to 23. The page margin is 16 at the sides, 8 at the top and 12 at the
+  bottom. Android's 8 pt label-to-field gap (§4) is unchanged; the divider-to-label spacing now follows the card.
+- **Create Task** is always on `actionGradient` (#572BF2 → #3D24C4, top to bottom) with bold white text. It is at
+  0.88 opacity while it can't save and 0.85 while pressed; the arrow is hidden from TalkBack. **As in Swift**,
+  disabled reads only slightly dimmer than enabled (§25 Swift bug 1). It stays `disabled` for TalkBack, and Close
+  is right beside it.
+- TASK NAME's icon is `list.bullet` in Swift. Ionicons draws both it and the old `checklist` as `list-outline`, so
+  nothing changes on screen.
+- Not ported: inputs on `systemGray6` (Android draws its own §3 field surface, which also avoids Swift bug 2), and
+  the notes row's new Swift layout (Android's §4 NOTES field stays).
+- Tests: `task-editor-polish.test.tsx` (7: header, Close, the sheet, stepping and the "35m" label, the preset
+  labels, the card spacing, the Create Task gradient), plus updates to `task-editor`, `task-layout` and
+  `android-forms`.
+- **Phone check:** Today → + → Add Manually. There is one header: Close · Create New Task · a gradient mic, with
+  no stack bar above it. TIME ESTIMATE → Custom → + twice → Done shows "40m". Create Task is purple before you
+  type and does nothing until there is a name. Check dark mode and the largest font size.
+
+### 71.7 Briefing Read aloud on the phone (§25 row 8; 04fa8d8; approved 2026-11-18)
+
+`src/voice/briefSpeech.ts` (new), `src/features/ask/BriefSectionDetail.tsx`, `app/ask/brief/[index].tsx`,
+`src/features/ask/briefHandlers.ts`, `src/components/AskNexdoView.tsx`. **New native module: `expo-speech ~57.0.3`**
+(Android `TextToSpeech`). It adds no permission, only a `<queries>` entry for the `TTS_SERVICE` intent.
+
+- A briefing section's ⋯ → **Read aloud** speaks the section's lines on the phone, at the app's voice level (the
+  Voice volume slider), after stopping any Ask voice reply. **OpenAI sharing no longer matters here.** The old
+  "Allow OpenAI sharing in Account to use Read aloud." message is gone from this page.
+- While it reads, the menu offers **Stop reading** instead. When it finishes, or after Stop, **Read aloud** comes
+  back and reads from the start again. It is disabled for an empty section.
+- **Gate:** with spoken replies off in Settings, the page says "Enable spoken replies in Settings to use Read
+  aloud." and does not speak. If the phone's engine fails: "Nexdo couldn’t start reading this briefing. Try again."
+  Both appear on the page, as Swift's do.
+- It stops when you leave the page or the app goes to the background.
+- **Android difference:** Android speaks at most 4,000 characters per utterance, where iOS has no limit. A longer
+  section is cut at a paragraph break (else a space) and the parts are queued, so it is still read in full, in
+  one go.
+- **Android difference:** the voice is the phone's default text-to-speech voice and language (Settings → Text-to-
+  speech), as Swift uses the system voice. A phone with no TTS engine should get the failure message (not tried on a phone).
+- Unchanged: Read aloud on Ask's own answer cards still uses the server voice and its OpenAI sharing gate, as in
+  Swift.
+- Tests: `briefSection.test.tsx` "on-device Read aloud" (7: speaks with no OpenAI sharing and at the voice level,
+  Stop reading and replay, the spoken-replies gate, an engine failure, an empty section, background and leaving,
+  long sections); `ask.test.tsx` (Ask hands the page `stopVoiceReply`). `jest.setup.js` mocks `expo-speech`.
+- **Phone check:** turn **off** OpenAI sharing. Ask → Daily Brief → open a section → ⋯ → Read aloud: the phone reads
+  it. ⋯ shows Stop reading; tap it, and the voice stops. Read aloud again starts from the top. Press Home while it
+  reads: it stops. Turn off spoken replies in Settings: Read aloud shows the message instead.

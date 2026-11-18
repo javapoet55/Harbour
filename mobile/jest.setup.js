@@ -153,6 +153,15 @@ jest.mock('expo-audio', () => ({
   requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
 }));
 
+// Phase 15 (04fa8d8): a briefing section reads aloud on the device through expo-speech's TextToSpeech, which
+// needs the native runtime. Tests read the options a `speak` was given and call its callbacks themselves.
+jest.mock('expo-speech', () => ({
+  speak: jest.fn(),
+  stop: jest.fn(async () => undefined),
+  isSpeakingAsync: jest.fn(async () => false),
+  maxSpeechInputLength: 4000,
+}));
+
 // expo-sensors is native-only; the bug-report shake (src/features/bugReport/useBugReportHost.ts) listens
 // to the accelerometer. Tests drive `listeners` directly.
 jest.mock('expo-sensors', () => {
