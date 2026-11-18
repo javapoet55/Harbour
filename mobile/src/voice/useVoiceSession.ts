@@ -65,6 +65,7 @@ export function useVoiceSession({
   enabled,
   onClose,
   foodContext,
+  projectId,
 }: {
   scope: VoiceScope;
   /** The two products a food conversation compares, sent with the session (NexdoApp.swift:539). */
@@ -72,6 +73,8 @@ export function useVoiceSession({
   /** False until consent has been given, which is when Swift calls `start()`. */
   enabled: boolean;
   onClose: () => void;
+  /** 08a64da: the folder new tasks and reminders go into (`VoiceSessionResources(projectID:)`). */
+  projectId?: string;
 }): UseVoiceSession {
   const queryClient = useQueryClient();
   const profile = useSession((current) => current.profile);
@@ -87,6 +90,8 @@ export function useVoiceSession({
   const transport = useRef<WebRtcTransport | null>(null);
   const meter = useRef<VoiceUsageMeter | null>(null);
   const food = useRef(foodContext);
+  // Fixed for the screen's lifetime, as Swift's `@StateObject` resources are.
+  const folder = useRef(projectId);
   // `start()` for the session the effect below owns; replaced each time it builds one.
   const starter = useRef<() => void>(() => undefined);
   const closer = useRef(onClose);
@@ -110,6 +115,7 @@ export function useVoiceSession({
       uuid: randomUUID,
       consent: () => ({ ai: useConsent.getState().ai, voice: useConsent.getState().voice }),
       currentOwnerId: () => useSession.getState().profile?.id,
+      projectId: folder.current,
     });
     const peer = new WebRtcTransport({
       driver: createNativeDriver(),

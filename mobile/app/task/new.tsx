@@ -141,7 +141,7 @@ export default function NewTask() {
     // behind the keyboard with no way to reach them.
     <KeyboardAvoidingView behavior="padding" style={styles.fill}>
       {/* 61788dc / fb29e95: the toolbar microphone (RootView.swift:2353-2362). */}
-      <Stack.Screen options={{ headerRight: () => <TaskEditorVoiceButton disabled={busy} /> }} />
+      <Stack.Screen options={{ headerRight: () => <TaskEditorVoiceButton disabled={busy} projectId={projectID} /> }} />
       <NexdoTaskBackdrop />
       <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
@@ -387,9 +387,10 @@ type EditorIcon = 'checklist' | 'text.alignleft' | 'folder' | 'calendar' | 'cloc
 /**
  * `ToolbarItem(placement: .topBarTrailing)` `mic.fill` (RootView.swift:2353-2362): drop focus and open a fresh
  * Add by Voice over the editor. Each press pushes a new voice screen, which is Swift's new `voicePresentationID`
- * — a new session every time. Disabled while the task is being created.
+ * — a new session every time. Disabled while the task is being created. 08a64da: the session saves into the folder
+ * chosen in the form right now (`AddTaskByVoiceView(projectID: projectID)`, RootView.swift:2333).
  */
-export function TaskEditorVoiceButton({ disabled }: { disabled: boolean }) {
+export function TaskEditorVoiceButton({ disabled, projectId = null }: { disabled: boolean; projectId?: string | null }) {
   const theme = useTheme();
   return (
     <Pressable
@@ -400,7 +401,7 @@ export function TaskEditorVoiceButton({ disabled }: { disabled: boolean }) {
       hitSlop={8}
       onPress={() => {
         Keyboard.dismiss();
-        router.push('/task/voice-capture');
+        router.push(projectId ? { pathname: '/task/voice-capture', params: { projectId } } : '/task/voice-capture');
       }}
       style={[styles.voiceButton, disabled && styles.voiceDisabled]}
       testID="task-editor-voice"

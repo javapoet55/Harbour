@@ -2967,3 +2967,24 @@ caption "Folder" (`app/task/[id].tsx`).
 - **Phone check:** Tasks → **Folders** tab: "Search Folders", "Folders", "+ New Folder", the "No Named Folder" card.
   Open a folder → ⋯ shows "Edit folder" / "Delete folder", and Delete asks "Delete this folder?". Create New Task
   shows FOLDER and "No Named Folder".
+
+### 71.2 Voice from Create New Task keeps the chosen folder (§25 row 3; 08a64da)
+
+`TaskEditorVoiceButton` (`app/task/new.tsx`) passes the folder chosen in the form right now as
+`/task/voice-capture?projectId=…`. `app/task/voice-capture.tsx` hands it to `AddTaskByVoiceView` → `useVoiceSession`
+→ `VoiceToolExecutor`, which adds a top-level `projectId` to `create_task` and `create_reminder` calls only
+(`NexdoApp.swift:613-615`). The `arguments` the model sent are unchanged.
+
+- With no folder chosen, the mic pushes the plain `/task/voice-capture`, as before. No other voice entry (Tasks'
+  Add by Voice, Ask, Calendar, food) passes a folder, as in Swift.
+- The folder is fixed when the voice screen opens (Swift's `@StateObject` resources). Changing the field while
+  voice is open does not move the session.
+- An unowned or deleted folder is the server's to refuse: the model gets "The selected folder is unavailable. No
+  task was saved. …" and says so. RN adds no copy of its own.
+- **Not handled, as in Swift:** the editor stays open with its draft after voice saves into the folder, so
+  Create Task can still make a second task (§25 Swift bug 10).
+- Tests: `toolExecutor.test.ts` "a selected folder", `useVoiceSession.test.tsx` "useVoiceSession folder",
+  `voice-screens.test.tsx` "voice in a folder", `task-editor.test.tsx` "opens voice in the folder chosen in the
+  form".
+- **Phone check:** open a folder → Add task → tap the mic and say "Add review estimates tomorrow at 10". Close
+  voice and the editor. The task is in that folder, not in No Named Folder.

@@ -58,6 +58,7 @@ jest.mock('./conversation', () => {
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import { MICROPHONE_DENIED } from '../lib/permissionAccess';
 import { useVoiceSession, type UseVoiceSession } from './useVoiceSession';
+import { VoiceToolExecutor } from './toolExecutor';
 
 function Probe() {
   useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined });
@@ -236,5 +237,39 @@ describe('useVoiceSession start', () => {
     await settle();
     expect(result.current?.startupError).toBeNull();
     expect(mockConversations[0].starts).toBe(1);
+  });
+});
+
+/** 08a64da: `VoiceSessionResources(projectID:)` hands the folder to the executor (AddTaskByVoiceView.swift:42-43). */
+describe('useVoiceSession folder (Phase 15)', () => {
+  function FolderProbe({ projectId }: { projectId?: string }) {
+    useVoiceSession({ scope: 'general', enabled: true, onClose: () => undefined, projectId });
+    return null;
+  }
+
+  it('builds the executor with the selected folder, and with none by default', async () => {
+    const executor = VoiceToolExecutor as unknown as jest.Mock;
+    executor.mockClear();
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FolderProbe projectId="folder-1" />
+      </QueryClientProvider>,
+    );
+    expect(executor.mock.calls[0][0]).toMatchObject({ projectId: 'folder-1', scope: 'general' });
+    // Unmount before startup reaches the credential request, so nothing leaks into the next test.
+    view.unmount();
+
+    executor.mockClear();
+    const plain = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FolderProbe />
+      </QueryClientProvider>,
+    );
+    expect(executor.mock.calls[0][0].projectId).toBeUndefined();
+    plain.unmount();
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+    mockRequest.mockClear();
   });
 });

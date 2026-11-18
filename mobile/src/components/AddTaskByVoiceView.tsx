@@ -41,6 +41,8 @@ export type AddTaskByVoiceViewProps = {
   foodContext?: FoodVoiceContext;
   /** Closes the screen when it is not a route (Item Alternatives presents it over its own sheet). */
   onClose?: () => void;
+  /** `AddTaskByVoiceView(projectID:)` (AddTaskByVoiceView.swift:59, 08a64da): Create New Task's chosen folder. */
+  projectId?: string;
 };
 
 /** `AddTaskByVoiceView.swift:69-71`. The ask-mode examples changed in 8c5f969 (moments and shopping). */
@@ -59,7 +61,7 @@ const FOOD_CONSENT_BODY =
 const CONSENT_BODY =
   'Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.';
 
-export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, foodContext, onClose }: AddTaskByVoiceViewProps) {
+export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, foodContext, onClose, projectId }: AddTaskByVoiceViewProps) {
   const close = onClose ?? (() => router.back());
   const closeRef = useRef(close);
   useEffect(() => {
@@ -75,7 +77,7 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, food
   const [asked, setAsked] = useState(false);
 
   const scope: VoiceScope = foodContext ? 'food' : calendarOnly ? 'calendar' : 'general';
-  const voice = useVoiceSession({ scope, enabled: allowed, onClose: close, foodContext });
+  const voice = useVoiceSession({ scope, enabled: allowed, onClose: close, foodContext, projectId });
 
   /**
    * `.task { … if model.aiConsent && model.voiceConsent { await start() } else { consent = true } }`

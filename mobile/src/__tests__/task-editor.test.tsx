@@ -254,6 +254,14 @@ describe('Create New Task: Add task by voice', () => {
     expect(mockPush).toHaveBeenCalledTimes(2);
   });
 
+  it('opens voice in the folder chosen in the form (08a64da)', async () => {
+    mockParams.mockReturnValue({ projectId: 'p1' });
+    await renderEditor();
+    await fireEvent.press(screen.getByTestId('task-editor-voice'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/task/voice-capture', params: { projectId: 'p1' } });
+    mockParams.mockReturnValue({});
+  });
+
   it('is disabled while the task is being created', async () => {
     mockCreateTask.mockReturnValue(new Promise(() => undefined));
     await renderEditor();

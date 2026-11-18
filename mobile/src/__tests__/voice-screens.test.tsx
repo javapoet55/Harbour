@@ -11,9 +11,10 @@ import { useSession } from '../store/session';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams(),
   Stack: { Screen: () => null },
 }));
 
@@ -46,6 +47,7 @@ jest.mock('../voice/useVoiceSession', () => ({
 }));
 
 import Today from '../../app/(tabs)/(today)/today/index';
+import VoiceCapture from '../../app/task/voice-capture';
 import { AddTaskByVoiceView } from '../components/AddTaskByVoiceView';
 
 const ZONE = 'America/Los_Angeles';
@@ -311,6 +313,30 @@ describe('the voice screen', () => {
 });
 
 /** Sections 7 and 8 of `TodayView.body` (ios/App/RootView.swift:1095-1126). */
+/** 08a64da: Create New Task's microphone opens voice in the folder chosen in the form (RootView.swift:2333). */
+describe('voice in a folder (Phase 15)', () => {
+  beforeEach(() => {
+    mockUseVoiceSession.mockReturnValue(voiceSession());
+    useConsent.getState().setConsent({ ai: true, voice: true });
+    useSession.setState({ status: 'signedIn', profile: PROFILE });
+  });
+
+  it('hands the folder from the route to the session', async () => {
+    mockParams.mockReturnValue({ projectId: 'folder-1' });
+    await show(<VoiceCapture />);
+    expect(mockUseVoiceSession).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'general', projectId: 'folder-1' }));
+  });
+
+  it('opens without a folder from everywhere else', async () => {
+    mockParams.mockReturnValue({});
+    await show(<VoiceCapture />);
+    expect(mockUseVoiceSession.mock.lastCall?.[0].projectId).toBeUndefined();
+
+    await show(<AddTaskByVoiceView askMode />);
+    expect(mockUseVoiceSession.mock.lastCall?.[0].projectId).toBeUndefined();
+  });
+});
+
 describe('the last two Today sections', () => {
   const PROPOSAL: ProtectedTimeProposal = {
     taskId: 't1',
