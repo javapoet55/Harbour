@@ -3066,3 +3066,38 @@ caption "Folder" (`app/task/[id].tsx`).
 - **Phone check:** My Page → Report Bugs. The page is titled Report Bugs with Open selected and your reports
   listed. Closed switches the list. Report Bug → send a test report → Done returns to the Open list, with the new
   report at the top. Shake to open it from another screen: the old introduction shows.
+
+### 71.6 Create New Task: Swift's new header, estimate sheet and Create Task bar (§25 row 4; 9e82c95)
+
+`app/task/new.tsx`, `app/task/_layout.tsx`. The Android field, label, chip and NOTES deviations (§3, §4)
+stay as they are.
+
+- **The stack header is gone** (`headerShown: false`, Swift's `.toolbar(.hidden)`). The screen draws its own:
+  a **Close** capsule (accent text on the card fill with a hairline), "Create New Task" centred as a heading, and
+  the microphone. At large text sizes the heading sits above the two controls. The bar is the surface at 85%,
+  RN's stand-in for `.ultraThinMaterial`. The header pads the status-bar inset itself.
+- **The microphone** is Swift's 44-point disc on `voiceGradient` (#874DF2 → #4D2BD9 → #215CE6) inside two accent
+  halos (16%, 8%). It still dims to 40% while creating (the §59 Android choice). Close now dims the same way. Swift
+  doesn't dim either (§25 Swift bug 1's family), but a control that does nothing should look it.
+- **TIME ESTIMATE** has a trailing **Custom** button ("35m" once a non-preset is chosen; spoken "Custom estimate,
+  35 minutes"). It opens a **Custom estimate** sheet: "N minutes" with − / + (5–480 in 5s; each end disables) and
+  **Done**. The inline stepper is gone. The preset chips are spoken "15 minutes"…"60 minutes". Android keeps its
+  scrolling chip row; Swift stacks the chips vertically only at accessibility sizes, which the chip row already
+  handles by scrolling.
+- **The card** is 24 radius with 18 padding at the sides and top. Its spacing follows the scroll area's height, as
+  Swift's does: 14 at 520 pt or less, up to 23. The page margin is 16 at the sides, 8 at the top and 12 at the
+  bottom. Android's 8 pt label-to-field gap (§4) is unchanged; the divider-to-label spacing now follows the card.
+- **Create Task** is always on `actionGradient` (#572BF2 → #3D24C4, top to bottom) with bold white text. It is at
+  0.88 opacity while it can't save and 0.85 while pressed; the arrow is hidden from TalkBack. **As in Swift**,
+  disabled reads only slightly dimmer than enabled (§25 Swift bug 1). It stays `disabled` for TalkBack, and Close
+  is right beside it.
+- TASK NAME's icon is `list.bullet` in Swift. Ionicons draws both it and the old `checklist` as `list-outline`, so
+  nothing changes on screen.
+- Not ported: inputs on `systemGray6` (Android draws its own §3 field surface, which also avoids Swift bug 2), and
+  the notes row's new Swift layout (Android's §4 NOTES field stays).
+- Tests: `task-editor-polish.test.tsx` (7: header, Close, the sheet, stepping and the "35m" label, the preset
+  labels, the card spacing, the Create Task gradient), plus updates to `task-editor`, `task-layout` and
+  `android-forms`.
+- **Phone check:** Today → + → Add Manually. There is one header: Close · Create New Task · a gradient mic, with
+  no stack bar above it. TIME ESTIMATE → Custom → + twice → Done shows "40m". Create Task is purple before you
+  type and does nothing until there is a name. Check dark mode and the largest font size.

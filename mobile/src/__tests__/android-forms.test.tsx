@@ -86,8 +86,10 @@ describe('New Task on Android', () => {
     expect(flat('duration-15-surface')).toMatchObject(raisedField);
     // The selected choice keeps its gradient, in the same 12 radius.
     expect(flat('date-Today-surface')).toMatchObject({ borderRadius: 12 });
-    expect(flat('duration-stepper')).toMatchObject({ ...raisedField, padding: 15 });
     await waitFor(() => expect(flat('project-field')).toMatchObject(raisedField));
+    // 9e82c95: the stepper is in the Custom estimate sheet now.
+    await fireEvent.press(screen.getByTestId('duration-custom'));
+    expect(flat('duration-stepper')).toMatchObject({ ...raisedField, padding: 15 });
   });
 });
 
@@ -96,7 +98,8 @@ describe('New Task on iOS', () => {
 
   it('keeps the Swift fields', async () => {
     await wrap(<NewTask />);
-    expect(flat('task-title')).toMatchObject({ backgroundColor: dark.groupedBackground, borderRadius: 15, padding: 16 });
+    // 9e82c95: 12 × 10 inside a 14-radius field (RootView.swift:2276-2280).
+    expect(flat('task-title')).toMatchObject({ backgroundColor: dark.groupedBackground, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 });
     expect(flat('date-Tomorrow-surface')).toMatchObject({ backgroundColor: dark.groupedBackground, borderRadius: 13 });
     expect(flat('date-Today-surface').borderRadius).toBe(13);
   });

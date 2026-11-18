@@ -166,14 +166,15 @@ describe('Task creation editor', () => {
     expect(body.startAt).toBe('2026-09-17T03:30:00.000Z');
   });
 
-  it('steps the custom estimate by 5, bounded to 5–480', async () => {
+  it('steps the custom estimate by 5, bounded to 5–480, in the Custom estimate sheet (9e82c95)', async () => {
     await renderEditor();
+    await fireEvent.press(screen.getByTestId('duration-custom'));
 
     await fireEvent.press(screen.getByTestId('duration-increase'));
-    await waitFor(() => expect(screen.getByText('35 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('35 minutes')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('duration-decrease'));
-    await waitFor(() => expect(screen.getByText('30 min')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('30 minutes')).toBeTruthy());
   });
 
   it('closes on success', async () => {
