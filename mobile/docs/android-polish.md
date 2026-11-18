@@ -3015,3 +3015,29 @@ caption "Folder" (`app/task/[id].tsx`).
 - **Phone check:** turn off OpenAI sharing in Account, then open Tasks → Add by Voice. The card shows on the
   screen, not as a dialog. Not now goes back once, to Tasks. Turn sharing on, open Create New Task → mic → Close.
   You are back on Create New Task, not Tasks.
+
+### 71.4 Share List: one email by default (§25 row 6; d471768)
+
+`src/features/shopping/EmailScreen.tsx`, `src/api/shopping.ts`.
+
+- **One Time / Repeat** at the top of the Schedule card, One Time selected. It is the shared `SettingsSegments`, so
+  Android draws it with the §9 segment rules (each segment as wide as its label, accent-tinted selection), not
+  as iOS's equal-width capsule. Changing it turns permission off, as in Swift.
+- One Time shows **Send date** (a date pill, tomorrow by default); Repeat shows **Repeat weekly on**. The time is
+  captioned **Send time** and read as "Send time, …". Pickup defaults to tomorrow, **11 AM – 12 PM**.
+- Swift's new copy word for word: "SHOPPING LIST EMAIL", the intro and tip without "weekly", "Selected list for
+  sharing.", the two pickup notes, the permission card and toggle per frequency, "Saving replaces the schedule. You
+  can pause it before the email is submitted.", "Scheduled email is not enabled on this server yet.", "Pause
+  scheduled email", and the blockers ("Scheduled email is unavailable on this server. …", "One-time scheduling is
+  unavailable on this server.", "Turn on permission to authorize scheduled email.").
+- Status: the subtitle is "One-time email" or "Weekly email". A one-time email that went out is **Finished** (check
+  circle); one cancelled by finishing the trip stays **Paused**. "Next run" is hidden once the email is queued.
+- A saved schedule opens on its own frequency (`sendDate` set → One Time). Save sends `sendDate` (yyyy-MM-dd) or
+  `null`.
+- **Kept as Swift has it:** a saved schedule with no pickup hour reloads at 9 AM, not the new 11 AM default (§25
+  Swift bug 7). Every schedule either app saves has a pickup, so this only reaches old rows.
+- The send date's pill has no spoken label of its own, like the pickup date beside it (both `labelsHidden`).
+- Tests: `email.test.tsx` "Shopping list email" (17 cases, rewritten for one time).
+- **Phone check:** Shopping → a list → Schedule Email. One Time is selected, Send date shows tomorrow, pickup
+  11 AM – 12 PM. Tap Repeat: Repeat weekly on appears and permission turns off. Save a one-time email to a test
+  address. The status card says "One-time email · Active" with no "Next run" after the worker queues it.
