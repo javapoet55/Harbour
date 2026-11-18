@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import type { Profile } from '../../../api';
+import { useAppearance } from '../../../store/appearance';
 import { useSession } from '../../../store/session';
 
 const mockChange = jest.fn();
@@ -126,4 +127,38 @@ test('"Forgot password?" sits under the fields and opens the reset sheet', async
   await fireEvent.press(forgot);
   expect(onForgotPassword).toHaveBeenCalledTimes(1);
   expect(mockChange).not.toHaveBeenCalled();
+});
+
+/**
+ * Phase 14 (a80c206, 61788dc; capture `change-password-v4`): Swift's footer and gate, and My Page's
+ * `nexdoActionForeground` tint on "Forgot password?" and the back chevron — indigo in light, white in dark.
+ */
+describe('Change password, Phase 14', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system', voiceVolume: 1 }));
+
+  it('says the 72-byte footer and has no 12-character minimum', async () => {
+    await open();
+    expect(screen.getByText('Choose a password (72 bytes maximum). You’ll need to sign in again after changing your password.')).toBeTruthy();
+    expect(passwordChangeValid('old', 'a', 'a')).toBe(true);
+    expect(passwordChangeValid('old', 'é'.repeat(37), 'é'.repeat(37))).toBe(false);
+  });
+
+  it.each([
+    ['night', '#FFFFFF'],
+    ['day', '#3D29F0'],
+  ] as const)('tints Forgot password? and Back with the action foreground (%s)', async (appearance, color) => {
+    useAppearance.setState({ appearance, voiceVolume: 1 });
+    await open();
+    expect(StyleSheet.flatten(screen.getByText('Forgot password?').props.style).color).toBe(color);
+    // The glyph (Ionicons is a plain View in tests) carries the colour as a prop.
+    type Node = { props: Record<string, unknown>; children: (Node | string)[] };
+    const colours: unknown[] = [];
+    const walk = (node: Node | string) => {
+      if (typeof node === 'string') return;
+      if (node.props.color !== undefined) colours.push(node.props.color);
+      node.children.forEach(walk);
+    };
+    walk(screen.getByLabelText('Back') as unknown as Node);
+    expect(colours).toEqual([color]);
+  });
 });

@@ -28,8 +28,8 @@ export function TaskTabs({ projects, onChange }: { projects: boolean; onChange: 
   const theme = useTheme();
   return (
     <View style={[styles.tabTrack, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06) }]} testID="tasks-segments">
-      {(['Tasks', 'Projects'] as const).map((label) => {
-        const selected = (label === 'Projects') === projects;
+      {(['Tasks', 'Folders'] as const).map((label) => {
+        const selected = (label === 'Folders') === projects;
         const text = (
           <Text numberOfLines={1} style={[styles.tabLabel, { color: selected ? '#FFFFFF' : theme.colors.ink }]}>
             {label}
@@ -41,7 +41,7 @@ export function TaskTabs({ projects, onChange }: { projects: boolean; onChange: 
             accessibilityRole="button"
             accessibilityLabel={label}
             accessibilityState={{ selected }}
-            onPress={() => onChange(label === 'Projects')}
+            onPress={() => onChange(label === 'Folders')}
             style={styles.tabCell}
             testID={`segment-${label}`}
           >

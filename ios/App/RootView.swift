@@ -335,7 +335,9 @@ private struct TaskDesignPreview: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                model.profile = Profile(id: "preview", name: "Sri", email: "sri@example.com", timeZone: "America/Los_Angeles")
+                model.profile = Profile(id: "preview", name: "Sri", email: "sri@example.com",
+                                        timeZone: ProcessInfo.processInfo.arguments.contains("-voice-startup-test")
+                                            ? TimeZone.autoupdatingCurrent.identifier : "America/Los_Angeles")
                 var calendar = Calendar(identifier: .gregorian)
                 calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
                 let today = calendar.startOfDay(for: Date())
@@ -1843,7 +1845,7 @@ struct TasksView: View {
                     header
                     HStack(spacing: 0) {
                         taskTab("Tasks", projects: false)
-                        taskTab("Projects", projects: true)
+                        taskTab("Folders", projects: true)
                     }
                     .padding(4)
                     .background(Color.nexdoIndigo.opacity(0.06), in: Capsule())
@@ -2239,6 +2241,7 @@ struct TaskEditor: View {
     @State private var dateExplicitlyChosen = false
     @State private var customDate = Date()
     @State private var showingDatePicker = false
+    @State private var showingCustomEstimate = false
     @State private var showingVoice = false
     @State private var voicePresentationID = UUID()
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -2257,115 +2260,77 @@ struct TaskEditor: View {
     }
 
     private var creationForm: some View {
-        ZStack {
-            NexdoTaskBackdrop()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    TaskEditorLabel(title: "TASK NAME", icon: "checklist")
-                    TextField("Task name", text: $title, prompt: Text(focusedField == .title ? "" : "What needs to get done?").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
-                        .font(.title3.weight(.semibold)).lineLimit(1...3)
-                        .focused($focusedField, equals: .title)
-                        .accessibilityLabel("Task name")
-                        .padding(16)
-                        .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
-                        .overlay(RoundedRectangle(cornerRadius: 15).stroke(focusedField == .title ? TaskCreationStyle.accent : TaskCreationStyle.border, lineWidth: focusedField == .title ? 2 : 1))
+        VStack(spacing: 0) {
+            creationHeader
+            GeometryReader { viewport in
+                let spacing = min(23, max(14, 14 + (viewport.size.height - 520) / 14))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: spacing) {
+                        TaskEditorLabel(title: "TASK NAME", icon: "list.bullet")
+                        TextField("Task name", text: $title, prompt: Text("What needs to get done?").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
+                            .font(.title3.weight(.semibold)).lineLimit(1...3)
+                            .focused($focusedField, equals: .title)
+                            .accessibilityLabel("Task name")
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .frame(minHeight: 44)
+                            .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(focusedField == .title ? TaskCreationStyle.accent : TaskCreationStyle.border, lineWidth: focusedField == .title ? 2 : 1))
 
-                    Divider().opacity(0.45)
-                    DisclosureGroup(isExpanded: $notesExpanded) {
-                        TextField("Task notes", text: $notes, prompt: Text("Add context, links, or a definition of done…").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
-                            .lineLimit(3...12).focused($focusedField, equals: .notes)
-                            .accessibilityLabel("Task notes")
-                            .padding(16)
-                            .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
-                            .overlay(RoundedRectangle(cornerRadius: 15).stroke(TaskCreationStyle.border))
-                            .padding(.top, 12)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            TaskEditorLabel(title: "NOTES", icon: "text.alignleft")
-                            if !notesExpanded {
-                                Text(notes.isEmpty ? "Add a note (optional)" : notes)
-                                    .font(.subheadline).foregroundStyle(Color.nexdoSecondary).lineLimit(1)
-                            }
-                        }.frame(minHeight: 44, alignment: .leading)
-                    }
-                    .onChange(of: notesExpanded) { _, expanded in
-                        if !expanded && focusedField == .notes { focusedField = nil }
-                    }
-                    .transaction { if reduceMotion { $0.animation = nil } }
+                        Divider().opacity(0.45)
+                        notesRow
 
-                    Divider().opacity(0.45)
-                    TaskEditorLabel(title: "PROJECT", icon: "folder")
-                    ProjectAssignmentField(projectID: $projectID, disclosureIcon: "chevron.right")
+                        Divider().opacity(0.45)
+                        TaskEditorLabel(title: "FOLDER", icon: "folder")
+                        ProjectAssignmentField(projectID: $projectID, disclosureIcon: "chevron.right")
 
-                    Divider().opacity(0.45)
-                    TaskEditorLabel(title: "DATE", icon: "calendar")
-                    dateButtons
-                    if let detected = DeterministicTaskActionDetector().detect(title: title) {
-                        Text("Nexdo Action: contact \(detected.contactName). Schedule: \(resolvedCreationDate.formatted(date: .abbreviated, time: .shortened)).")
-                            .font(.caption).foregroundStyle(Color.nexdoSecondary)
-                    }
-
-                    Divider().opacity(0.45)
-                    TaskEditorLabel(title: "TIME ESTIMATE", icon: "clock")
-                    HStack(spacing: 9) {
-                        ForEach(commonDurations, id: \.self) { minutes in
-                            Button("\(minutes)m") { duration = minutes }
-                                .buttonStyle(TaskDurationButtonStyle(selected: duration == minutes))
+                        Divider().opacity(0.45)
+                        TaskEditorLabel(title: "DATE", icon: "calendar")
+                        dateButtons
+                        if let detected = DeterministicTaskActionDetector().detect(title: title) {
+                            Text("Nexdo Action: contact \(detected.contactName). Schedule: \(resolvedCreationDate.formatted(date: .abbreviated, time: .shortened)).")
+                                .font(.caption).foregroundStyle(Color.nexdoSecondary)
                         }
+
+                        Divider().opacity(0.45)
+                        estimateSection
                     }
-                    Stepper(value: $duration, in: 5...480, step: 5) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Custom estimate").foregroundStyle(Color.nexdoSecondary)
-                            Text("\(duration) min").fontWeight(.semibold).foregroundStyle(Color.nexdoInk)
-                        }
-                    }
-                    .padding(15)
-                    .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
+                    .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, spacing + 4)
+                    .background(TaskCreationStyle.card, in: RoundedRectangle(cornerRadius: 24))
+                    .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(TaskCreationStyle.border))
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
                 }
-                .padding(20)
-                .background(TaskCreationStyle.card, in: RoundedRectangle(cornerRadius: 26))
-                .overlay(RoundedRectangle(cornerRadius: 26).stroke(TaskCreationStyle.border))
-                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 20)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
+        .background { NexdoTaskBackdrop() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button(action: save) {
                 HStack(spacing: 10) {
                     if model.busy { ProgressView().tint(.white) }
                     Text(model.busy ? "Creating…" : "Create Task")
-                    if !model.busy { Image(systemName: "arrow.right") }
+                    if !model.busy { Image(systemName: "arrow.right").accessibilityHidden(true) }
                 }
-                .font(.headline).foregroundStyle(canSave ? Color.white : Color(uiColor: .secondaryLabel))
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(canSave ? AnyShapeStyle(TaskCreationStyle.selectedGradient) : AnyShapeStyle(TaskCreationStyle.input), in: RoundedRectangle(cornerRadius: 17))
+                .font(.headline.weight(.bold)).foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .padding(.vertical, 2)
+                .background(TaskCreationStyle.actionGradient, in: RoundedRectangle(cornerRadius: 17))
+                .opacity(canSave ? 1 : 0.88)
             }
-            .buttonStyle(.plain).disabled(!canSave || checkingAvailability)
-            .padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
+            .buttonStyle(TaskCreateButtonStyle()).disabled(!canSave || checkingAvailability)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(.ultraThinMaterial)
         }
         .foregroundStyle(Color.primary)
         .tint(TaskCreationStyle.accent)
         .onAppear { if !projectInitialized { projectID = initialProjectID; projectInitialized = true } }
-        .navigationTitle("Create New Task")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Close") { closeTaskEditor() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    focusedField = nil
-                    voicePresentationID = UUID()
-                    showingVoice = true
-                } label: { Image(systemName: "mic.fill") }
-                .accessibilityLabel("Add task by voice")
-                .accessibilityIdentifier("task-editor-voice")
-                .disabled(model.busy || checkingAvailability)
-            }
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } }
         }
         .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(model.busy || checkingAvailability)
         .disabled(checkingAvailability)
-        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView().id(voicePresentationID) }
+        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView(projectID: projectID).id(voicePresentationID) }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Task date", selection: $customDate, displayedComponents: .date)
@@ -2375,6 +2340,124 @@ struct TaskEditor: View {
             }
             .environment(\.timeZone, accountTimeZone)
             .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var creationHeader: some View {
+        let heading = Text("Create New Task")
+            .font(.title3.bold()).multilineTextAlignment(.center)
+            .accessibilityAddTraits(.isHeader)
+        return Group {
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 8) { heading; headerControls }
+            } else {
+                ZStack { heading.padding(.horizontal, 76); headerControls }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    private var headerControls: some View {
+        HStack {
+            Button("Close", action: closeTaskEditor)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(TaskCreationStyle.accent)
+                .padding(.horizontal, 15).frame(minHeight: 44)
+                .background(TaskCreationStyle.card, in: Capsule())
+                .overlay(Capsule().strokeBorder(TaskCreationStyle.border))
+                .disabled(model.busy)
+            Spacer()
+            Button {
+                focusedField = nil
+                voicePresentationID = UUID()
+                showingVoice = true
+            } label: {
+                Image(systemName: "mic.fill")
+                    .font(.title3.weight(.semibold)).foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(TaskCreationStyle.voiceGradient, in: Circle())
+                    .padding(5).background(TaskCreationStyle.accent.opacity(0.16), in: Circle())
+                    .padding(4).background(TaskCreationStyle.accent.opacity(0.08), in: Circle())
+            }
+            .accessibilityLabel("Add task by voice")
+            .accessibilityIdentifier("task-editor-voice")
+            .disabled(model.busy || checkingAvailability)
+        }.buttonStyle(.plain)
+    }
+
+    private var notesRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                    notesExpanded.toggle()
+                }
+                if !notesExpanded && focusedField == .notes { focusedField = nil }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        TaskEditorLabel(title: "NOTES", icon: "text.alignleft")
+                        if !notesExpanded {
+                            Text(notes.isEmpty ? "Add a note (optional)" : notes)
+                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: notesExpanded ? "chevron.down" : "chevron.right")
+                        .font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                }
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(notesExpanded ? "Expanded" : "Collapsed")
+            if notesExpanded {
+                TextField("Task notes", text: $notes, prompt: Text("Add context, links, or a definition of done…").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
+                    .lineLimit(3...12).focused($focusedField, equals: .notes)
+                    .padding(12)
+                    .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(TaskCreationStyle.border))
+            }
+        }
+    }
+
+    private var estimateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TaskEditorLabel(title: "TIME ESTIMATE", icon: "clock")
+                Spacer()
+                Button(commonDurations.contains(duration) ? "Custom" : "\(duration)m") {
+                    focusedField = nil
+                    showingCustomEstimate = true
+                }
+                .font(.footnote.weight(.semibold))
+                .frame(minHeight: 44)
+                .accessibilityLabel("Custom estimate")
+                .accessibilityValue("\(duration) minutes")
+            }
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 9)) : AnyLayout(HStackLayout(spacing: 9))
+            layout {
+                ForEach(commonDurations, id: \.self) { minutes in
+                    Button("\(minutes)m") { duration = minutes }
+                        .buttonStyle(TaskDurationButtonStyle(selected: duration == minutes))
+                        .accessibilityLabel("\(minutes) minutes")
+                        .accessibilityAddTraits(duration == minutes ? .isSelected : [])
+                }
+            }
+        }
+        .sheet(isPresented: $showingCustomEstimate) {
+            NavigationStack {
+                Form {
+                    Stepper(value: $duration, in: 5...480, step: 5) {
+                        Text("\(duration) minutes")
+                    }
+                }
+                .navigationTitle("Custom estimate").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showingCustomEstimate = false } }
+                }
+            }
+            .presentationDetents([.medium])
         }
     }
 
@@ -2529,13 +2612,22 @@ private enum TasksBackdrop {
 
 enum TaskCreationStyle {
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
-    static let input = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let input = Color(uiColor: .systemGray6)
     static let border = Color(uiColor: .separator)
     static let accent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.72, green: 0.68, blue: 1, alpha: 1)
             : UIColor(red: 0.24, green: 0.16, blue: 0.78, alpha: 1)
     })
+    static let actionGradient = LinearGradient(colors: [
+        Color(red: 0.34, green: 0.17, blue: 0.95),
+        Color(red: 0.24, green: 0.14, blue: 0.77),
+    ], startPoint: .top, endPoint: .bottom)
+    static let voiceGradient = LinearGradient(colors: [
+        Color(red: 0.53, green: 0.30, blue: 0.95),
+        Color(red: 0.30, green: 0.17, blue: 0.85),
+        Color(red: 0.13, green: 0.36, blue: 0.90),
+    ], startPoint: .topLeading, endPoint: .bottomTrailing)
     static let selectedGradient = LinearGradient(colors: [
         Color(red: 0.57, green: 0.10, blue: 0.54),
         Color(red: 0.35, green: 0.19, blue: 0.75),
@@ -2551,6 +2643,12 @@ struct TaskEditorLabel: View {
             .font(.caption.weight(.semibold))
             .tracking(0.8)
             .foregroundStyle(TaskCreationStyle.accent)
+    }
+}
+
+private struct TaskCreateButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
 

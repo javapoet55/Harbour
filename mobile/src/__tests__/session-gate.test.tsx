@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { act, render, screen, waitFor } from '@testing-library/react-native';
 
 import { ApiError, createApiClient } from '../api/client';
 import { queryKeys } from '../query/keys';
+import { useIntroduction } from '../store/introduction';
 import { useSession } from '../store/session';
 
 jest.mock('expo-router', () => {
@@ -37,6 +38,7 @@ describe('session gate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useSession.setState({ status: 'unknown', profile: null });
+    useIntroduction.setState({ completed: true });
   });
 
   it('shows the splash while /api/me is undecided, not the sign-in screen', async () => {
@@ -64,6 +66,34 @@ describe('session gate', () => {
     mockMe.mockRejectedValue(new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' }));
     await renderGate();
     await waitFor(() => expect(screen.getByTestId('redirect')).toHaveTextContent('/sign-in'));
+  });
+
+  /** Phase 14: `entryFlow` (RootView.swift:128-137) — signed out, the introduction until it is seen. */
+  it('routes a signed-out first install to the introduction', async () => {
+    useIntroduction.setState({ completed: false });
+    mockMe.mockRejectedValue(new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' }));
+    await renderGate();
+    await waitFor(() => expect(screen.getByTestId('redirect')).toHaveTextContent('/introduction'));
+  });
+
+  it('keeps the splash while the introduction flag is still being read', async () => {
+    useIntroduction.setState({ completed: undefined });
+    mockMe.mockRejectedValue(new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' }));
+    await renderGate();
+    await waitFor(() => expect(mockMe).toHaveBeenCalled());
+    expect(screen.getByLabelText('Loading Nexdo')).toBeTruthy();
+    expect(screen.queryByTestId('redirect')).toBeNull();
+
+    await act(async () => useIntroduction.setState({ completed: true }));
+    expect(screen.getByTestId('redirect')).toHaveTextContent('/sign-in');
+  });
+
+  it('never shows the introduction to a signed-in session, and marks it seen', async () => {
+    useIntroduction.setState({ completed: false });
+    mockMe.mockResolvedValue({ user: profile });
+    await renderGate();
+    await waitFor(() => expect(screen.getByTestId('redirect')).toHaveTextContent('/today'));
+    await waitFor(() => expect(useIntroduction.getState().completed).toBe(true));
   });
 
   it('offers a retry when /api/me fails for a reason other than the session', async () => {

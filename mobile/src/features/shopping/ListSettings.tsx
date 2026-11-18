@@ -14,9 +14,13 @@ import { withStoreName } from './listLogo';
 import { LogoEditButton, LogoEditorPage, type LogoEditorDeps } from './LogoEditor';
 
 /**
- * `ShoppingSettings` (ios/App/ShoppingViews.swift:642-692): name, date and weekly repeat, then "Store
+ * `ShoppingSettings` (ios/App/ShoppingViews.swift:651-700): name, date and weekly repeat, then "Store
  * details" — Add New Store (Stores Near You), the store's name and two address lines, Directions, and
- * Store Hours. Save only, disabled while the name is empty or the ZIP is not a US ZIP.
+ * Store Hours. Save, disabled while the name is empty or the ZIP is not a US ZIP.
+ *
+ * Android ahead of iOS (§24 bug 2): Swift's only toolbar button is Save and the sheet cannot be swiped
+ * away, so leaving without saving means finding its top edge. Here **Cancel** closes it and discards the
+ * draft; the system back does the same on the settings page.
  *
  * Swift pushes Stores Near You and Store Hours inside the sheet's `NavigationStack`; here they are
  * pages of the same sheet, with Back. The Store Logo editor (bdb68ce) is a sheet over this one in Swift;
@@ -39,6 +43,25 @@ export function withStore(list: GroceryList, store: ShoppingStoreSuggestion): Gr
 /** `updateAddress(street:locality:)` (:684-691): a typed address is no longer the chosen place. */
 export function withAddress(list: GroceryList, lines: ShoppingStoreAddress): GroceryList {
   return { ...list, storeAddress: fullAddress(lines), storeZip: addressZip(lines), storePlaceId: null, storeWebsite: null };
+}
+
+/** The store a logo lookup would resolve: its name, website and place (the logo itself is separate). */
+function sameStore(a: GroceryList, b: GroceryList): boolean {
+  return (a.storeName ?? null) === (b.storeName ?? null) && (a.storeWebsite ?? null) === (b.storeWebsite ?? null) && (a.storePlaceId ?? null) === (b.storePlaceId ?? null);
+}
+
+/**
+ * `automaticLookup` for List Settings' logo (ce6d20a, :672-675): only while the draft's store is the one the
+ * server has saved for this list, since `store-brand` resolves the SAVED store by list id. A newly picked
+ * or typed store shows the cart until it is saved.
+ */
+export function logoLookupAllowed(saved: GroceryList, draft: GroceryList): boolean {
+  return saved.id === draft.id && sameStore(saved, draft);
+}
+
+/** A change the detail screen holds back until the server confirms it (`save(_:)`, ce6d20a, :516-522). */
+export function storeChanged(original: GroceryList, next: GroceryList): boolean {
+  return !sameStore(original, next) || (original.storeLogoData ?? null) !== (next.storeLogoData ?? null);
 }
 
 type Page = 'settings' | 'stores' | 'hours' | 'logo';
@@ -81,7 +104,7 @@ export function ListSettingsSheet({
       visible={visible}
       title={page === 'stores' ? 'Stores Near You' : page === 'hours' ? 'Store Hours' : page === 'logo' ? 'Store Logo' : ''}
       onRequestClose={page === 'settings' ? onClose : page === 'logo' ? () => !logoLoading && setPage('settings') : () => setPage('settings')}
-      left={page === 'settings' || page === 'logo' ? undefined : back}
+      left={page === 'settings' ? { title: 'Cancel', onPress: onClose, testID: 'list-settings-cancel' } : page === 'logo' ? undefined : back}
       right={
         page === 'logo'
           ? { title: 'Done', bold: true, disabled: logoLoading, onPress: () => setPage('settings'), testID: 'store-logo-done' }
@@ -114,6 +137,7 @@ export function ListSettingsSheet({
         <LogoEditorPage
           deps={logoDeps}
           failure={logoFailure}
+          automaticLookup={logoLookupAllowed(list, draft)}
           imageData={draft.storeLogoData}
           listId={draft.id}
           loading={logoLoading}
@@ -131,6 +155,7 @@ export function ListSettingsSheet({
         />
       ) : (
         <SettingsPage
+          automaticLookup={logoLookupAllowed(list, draft)}
           draft={draft}
           lines={lines}
           onAddress={(next) => {
@@ -149,12 +174,14 @@ export function ListSettingsSheet({
 }
 
 function SettingsPage({
+  automaticLookup,
   draft,
   setDraft,
   lines,
   onAddress,
   onPage,
 }: {
+  automaticLookup: boolean;
   draft: GroceryList;
   setDraft: (list: GroceryList) => void;
   lines: ShoppingStoreAddress;
@@ -215,6 +242,7 @@ function SettingsPage({
               />
             </View>
             <LogoEditButton
+              automaticLookup={automaticLookup}
               identity={`${draft.storeName ?? ''}|${draft.storeWebsite ?? ''}`}
               imageData={draft.storeLogoData}
               listId={draft.id}

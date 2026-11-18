@@ -48,7 +48,7 @@ export function openModuleGuide(module: WellnessModule): void {
 }
 
 /**
- * "Got it!" — the module itself (`moduleDestination`, WellnessChooserView.swift:44-58).
+ * "Continue" — the module itself (`moduleDestination`, WellnessChooserView.swift:44-58).
  *
  * `WellnessModuleEntrance` swaps the guide for the module inside the cover (`continued = true`,
  * WellnessModuleGuide.swift:133-141), so every module REPLACES the guide in the wellness stack: Back

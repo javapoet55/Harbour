@@ -49,9 +49,9 @@ export default function TasksTabLayout() {
           the detail's menu (`editing`, `:276`), so `new` and `edit` are modals. */}
       <Stack.Screen
         name="project/[id]/edit"
-        options={{ presentation: 'modal', title: 'Edit Project', headerLeft: closeButton('Cancel') }}
+        options={{ presentation: 'modal', title: 'Edit Folder', headerLeft: closeButton('Cancel') }}
       />
-      <Stack.Screen name="project/new" options={{ presentation: 'modal', title: 'Add Project', headerLeft: closeButton('Cancel') }} />
+      <Stack.Screen name="project/new" options={{ presentation: 'modal', title: 'New Folder', headerLeft: closeButton('Cancel') }} />
     </Stack>
   );
 }

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * QA M-02 (android-polish.md §45): `StatusBarOwner` is the only status-bar style setter. Any other —
+ * QA M-02 (android-polish.md §68): `StatusBarOwner` is the only status-bar style setter. Any other —
  * a `<StatusBar>` component (React Native's or expo-status-bar's), a screen's `statusBarStyle` (which
  * react-native-screens would apply natively on every screen change) or a direct `setBarStyle` — would
  * fight it, and the last one to run wins.

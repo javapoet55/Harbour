@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
@@ -15,7 +16,7 @@ import { MenuPicker } from '../moments/form';
 import { CALORIE_AGENT } from '../wellness/art';
 import { FoodEditor, type FoodDraft } from './FoodEditor';
 import { callNowNotice, chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
-import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, INK, Primary, ProgressBar, SECONDARY, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, type IconName } from './parts';
+import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, Primary, ProgressBar, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, useCalorieColors, type CalorieColors, type IconName } from './parts';
 import { SAMPLE_INTAKE } from './sample';
 import { useCalorieStore } from './useCalorieStore';
 import { useNutritionSettings } from '../../query/useNutrition';
@@ -79,6 +80,7 @@ function plural(count: number, word: string): string {
 
 export function CalorieTracker({ live, onClose, now = Date.now, region = deviceRegion() }: { live: boolean; onClose: () => void; now?: () => number; region?: string | null }) {
   const insets = useSafeAreaInsets();
+  const colors = useCalorieColors();
   const [page, setPage] = useState<CaloriePage>('intro');
   const [history, setHistory] = useState<CaloriePage[]>([]);
   const [callTime, setCallTime] = useState('20:00');
@@ -192,13 +194,30 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   // ---------------------------------------------------------------------------------------------
   // Pages
 
-  const art = (height: number) => <Image accessible={false} resizeMode="contain" source={CALORIE_AGENT} style={[styles.art, { height }]} />;
+  /**
+   * `CaloriePackArt()` in light. In dark the intro draws SF Symbols' `heart.text.clipboard.fill` in purple
+   * and blue instead (ce6d20a, :472-478), since the pack art is a picture on white. Android ahead of iOS:
+   * the Confirm page does the same; Swift still draws the pack art there, a white box on black (§24 bug 6).
+   */
+  const art = (height: number) =>
+    colors.dark ? (
+      <View accessible={false} style={[styles.art, styles.darkArt, { height }]} testID="calorie-art-dark">
+        <View>
+          <MaterialCommunityIcons color="#AF52DE" name="clipboard-text" size={92} />
+          <View style={styles.darkArtHeart}>
+            <Ionicons color="#007AFF" name="heart" size={30} />
+          </View>
+        </View>
+      </View>
+    ) : (
+      <Image accessible={false} resizeMode="contain" source={CALORIE_AGENT} style={[styles.art, { height }]} testID="calorie-art" />
+    );
 
   const intro = (
     <>
       {art(165)}
       <Text style={[parts.title2, styles.centered]}>Daily Food Check-in</Text>
-      <Text style={[parts.body, styles.centered, { color: SECONDARY }]}>
+      <Text style={[parts.body, styles.centered, { color: colors.secondary }]}>
         {live
           ? 'Build a daily habit. NexDo calls you once a day, logs what you ate and adds up the calories.'
           : 'Build a daily habit. Plan a check-in, track meals and explore your nutrition goals.'}
@@ -236,7 +255,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
     <>
       <Steps current={0} />
       <Text style={parts.title3}>When should NexDo call you?</Text>
-      <Text style={[parts.body, { color: SECONDARY }]}>Choose a time for your daily meal check-in.</Text>
+      <Text style={[parts.body, { color: colors.secondary }]}>Choose a time for your daily meal check-in.</Text>
       <Card>
         <ClockField hourCycle="h12" label="Call time" onChange={setCallTime} testID="calorie-call-time" value={callTime} variant="formRow" />
         <Divider />
@@ -246,7 +265,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         <Divider />
         <MenuPicker hideLabel label="Agent voice" onChange={setVoice} options={voices.map((value) => ({ value, title: capitalized(value) }))} testID="calorie-voice" value={voice} />
       </Card>
-      <Text style={[parts.caption, { color: SECONDARY }]}>Calls are placed between 8:00 AM and 9:30 PM.</Text>
+      <Text style={[parts.caption, { color: colors.secondary }]}>Calls are placed between 8:00 AM and 9:30 PM.</Text>
       <Text style={parts.headline}>If I don’t answer</Text>
       <Card>
         {NO_ANSWER_CHOICES.map((choice) => {
@@ -260,10 +279,10 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
               style={styles.choice}
               testID={`calorie-no-answer-${choice.key}`}
             >
-              <Ionicons color={SYSTEM_INDIGO} name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} />
+              <Ionicons color={colors.accent} name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} />
               <View style={parts.grow}>
                 <Text style={parts.headline}>{choice.title}</Text>
-                <Text style={[parts.caption, { color: SECONDARY }]}>{choice.detail}</Text>
+                <Text style={[parts.caption, { color: colors.secondary }]}>{choice.detail}</Text>
               </View>
             </Pressable>
           );
@@ -290,7 +309,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
               testID={`calorie-goal-${index}`}
               value={goals[index]}
             />
-            <Text style={[parts.caption, styles.unit, { color: SECONDARY }]}>{row.unit}</Text>
+            <Text style={[parts.caption, styles.unit, { color: colors.secondary }]}>{row.unit}</Text>
           </View>
         );
       })}
@@ -301,7 +320,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
     <>
       <Steps current={1} />
       <Text style={parts.title2}>Your Nutrition Goals</Text>
-      <Text style={[parts.subheadline, { color: SECONDARY }]}>Customize your targets. These values are examples, not personalized recommendations.</Text>
+      <Text style={[parts.subheadline, { color: colors.secondary }]}>Customize your targets. These values are examples, not personalized recommendations.</Text>
       <Card>
         <View style={styles.goalHeader}>
           <IconTile color="#FF3B30" name="flame" />
@@ -319,7 +338,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       {live ? (
         <Card>
           <ToggleRow label="Daily insight" onChange={setInsightsEnabled} testID="insights-toggle" value={insightsEnabled} />
-          <Text style={[parts.caption, { color: SECONDARY }]}>
+          <Text style={[parts.caption, { color: colors.secondary }]}>
             One factual observation a day about your own goals, with an optional shopping suggestion. It never labels foods good or bad.
           </Text>
         </Card>
@@ -362,7 +381,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   const phoneCard = (
     <Card testID="calorie-phone">
       <View style={styles.label}>
-        <Ionicons color={INK} name="call" size={17} />
+        <Ionicons color={colors.ink} name="call" size={17} />
         <Text style={parts.headline}>Your phone number</Text>
       </View>
       {phoneVerified ? (
@@ -382,7 +401,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         </View>
       ) : (
         <>
-          <Text style={[parts.caption, { color: SECONDARY }]}>
+          <Text style={[parts.caption, { color: colors.secondary }]}>
             {codeSent && codeByText ? "NexDo calls this number. First we'll text it a 6-digit code." : "NexDo calls this number. First we'll call it once and read out a 6-digit code."}
           </Text>
           <TextInput
@@ -390,8 +409,8 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
             keyboardType="phone-pad"
             onChangeText={setPhoneInput}
             placeholder="Mobile number, e.g. +1 650 555 0123"
-            placeholderTextColor="rgba(60, 60, 67, 0.3)"
-            style={styles.input}
+            placeholderTextColor={colors.placeholder}
+            style={[styles.input, fieldColors(colors)]}
             testID="calorie-phone-input"
             textContentType="telephoneNumber"
             value={phoneInput}
@@ -429,8 +448,8 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
                 keyboardType="number-pad"
                 onChangeText={setCodeInput}
                 placeholder="6-digit code"
-                placeholderTextColor="rgba(60, 60, 67, 0.3)"
-                style={styles.input}
+                placeholderTextColor={colors.placeholder}
+                style={[styles.input, fieldColors(colors)]}
                 testID="calorie-code-input"
                 textContentType="oneTimeCode"
                 value={codeInput}
@@ -462,7 +481,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <Steps current={2} />
       {art(125)}
       <Text style={[parts.title2, styles.centered]}>Daily Food Check-in</Text>
-      <Text style={[parts.body, { color: SECONDARY }]}>
+      <Text style={[parts.body, { color: colors.secondary }]}>
         {live ? 'Here’s what you’ve set up. You can change these options anytime.' : 'Here’s what you’ve set up. You can change these options anytime in this preview.'}
       </Text>
       {summary}
@@ -509,7 +528,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         </MaskedView>
       </View>
       <Text style={[parts.largeTitle, styles.centered]}>All Set!</Text>
-      <Text style={[parts.body, styles.centered, { color: SECONDARY }]}>
+      <Text style={[parts.body, styles.centered, { color: colors.secondary }]}>
         {live ? `NexDo will call you at ${callLabel} to log your meals.` : 'Your check-in design is ready. No agent has been activated and no calls will be placed.'}
       </Text>
       {summary}
@@ -615,11 +634,11 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <Text style={parts.headline}>{period === 'Week' ? (live ? 'Calories · This week (Mon–Sun)' : 'Calories · Last 7 days') : 'Calories · Weekly averages'}</Text>
           <ChartBars goal={goal} labels={chart.labels} values={chart.values} />
           {live && store.summary ? (
-            <Text style={[parts.caption, { color: SECONDARY }]}>
+            <Text style={[parts.caption, { color: colors.secondary }]}>
               {store.summary.daysLogged === 0 ? 'Nothing logged in this period yet' : `Average ${store.summary.averageKcal} kcal on ${plural(store.summary.daysLogged, 'logged day')}`}
             </Text>
           ) : !live ? (
-            <Text style={[parts.caption, { color: SECONDARY }]}>Illustrative trends · Sample data</Text>
+            <Text style={[parts.caption, { color: colors.secondary }]}>Illustrative trends · Sample data</Text>
           ) : null}
         </Card>
       )}
@@ -637,7 +656,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <View style={styles.row}>
         <Text style={[parts.headline, parts.grow]}>Key Nutrients</Text>
         <Pressable accessibilityRole="button" onPress={() => go('insights')} testID="calorie-view-insights">
-          <Text style={[parts.subheadline, { color: INK }]}>View Insights</Text>
+          <Text style={[parts.subheadline, { color: colors.ink }]}>View Insights</Text>
         </Pressable>
       </View>
       <Card testID="calorie-key-nutrients">
@@ -652,7 +671,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
                 {value !== null ? (
                   <Text style={parts.caption}>{`${value} / ${target} ${NUTRIENTS[index].unit}`}</Text>
                 ) : (
-                  <Text style={[parts.caption, { color: SECONDARY }]}>{`Goal ${grouped(target)} ${NUTRIENTS[index].unit}`}</Text>
+                  <Text style={[parts.caption, { color: colors.secondary }]}>{`Goal ${grouped(target)} ${NUTRIENTS[index].unit}`}</Text>
                 )}
               </View>
               {value !== null ? <ProgressBar color={COLORS[index]} value={value / target} /> : null}
@@ -660,7 +679,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           );
         })}
         {live ? (
-          <Text style={[parts.caption, { color: SECONDARY }]}>
+          <Text style={[parts.caption, { color: colors.secondary }]}>
             Omega-3 isn’t tracked yet. Other values come from USDA and Open Food Facts data for the foods you log; estimated items don’t add to them.
           </Text>
         ) : null}
@@ -671,9 +690,19 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         <TextButton
           destructive
           onPress={() =>
-            void perform(async () => {
-              if (await store.save({ enabled: false })) setNotice('Daily calls are paused. Turn them back on from Manage daily check-in.');
-            })
+            // Android ahead of iOS: Swift saves on the one tap (CalorieTrackerView.swift:807-811, §24 bug 1),
+            // right under Manage daily check-in. Here it asks first, and only Pause saves.
+            Alert.alert('Pause daily calls?', 'NexDo won’t call you until you turn daily calls back on from Manage daily check-in.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Pause',
+                style: 'destructive',
+                onPress: () =>
+                  void perform(async () => {
+                    if (await store.save({ enabled: false })) setNotice('Daily calls are paused. Turn them back on from Manage daily check-in.');
+                  }),
+              },
+            ])
           }
           testID="calorie-pause"
           title="Pause daily calls"
@@ -730,7 +759,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
             {[3, 6, 7].map((index) => (
               <Card key={index} testID={`calorie-gap-${index}`}>
                 <Feature color={COLORS[index]} detail={`${Math.max(0, goals[index] - SAMPLE_INTAKE[index])} ${NUTRIENTS[index].unit} below the sample target`} icon={SYMBOLS[index]} title={NUTRIENTS[index].label} />
-                <Text style={[parts.subheadline, { color: SECONDARY }]}>
+                <Text style={[parts.subheadline, { color: colors.secondary }]}>
                   {index === 3 ? 'Explore fruits, vegetables and whole grains.' : index === 6 ? 'Explore foods containing vitamin D.' : 'Explore fish, flaxseed and other sources of omega-3.'}
                 </Text>
               </Card>
@@ -744,13 +773,13 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <View style={styles.row}>
             <Text style={[parts.headline, parts.grow]}>{name}</Text>
             <Pressable accessibilityLabel="Add to log" accessibilityRole="button" onPress={() => openEditor(Array.from(name).slice(2).join(''))} testID={`calorie-idea-${name}`}>
-              <Ionicons color={INK} name="add-circle" size={26} />
+              <Ionicons color={colors.ink} name="add-circle" size={26} />
             </Pressable>
           </View>
-          <Text style={[parts.caption, { color: SECONDARY }]}>{live ? 'Add it to your food log for this day.' : 'Explore this food in your sample meal log.'}</Text>
+          <Text style={[parts.caption, { color: colors.secondary }]}>{live ? 'Add it to your food log for this day.' : 'Explore this food in your sample meal log.'}</Text>
         </Card>
       ))}
-      <Text style={[parts.caption, { color: SECONDARY }]}>These ideas are general examples; they are not an assessment of your nutrition or supplement needs.</Text>
+      <Text style={[parts.caption, { color: colors.secondary }]}>These ideas are general examples; they are not an assessment of your nutrition or supplement needs.</Text>
       <Primary onPress={() => go('log')} testID="calorie-open-log" title="Open Food Log" />
     </>
   );
@@ -758,7 +787,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   const foodLog = (
     <>
       {dateSelector}
-      <Text style={[parts.caption, { color: SECONDARY }]}>{live ? 'Items from your check-in call and ones you add here' : 'Sample meals · Edits last while this preview is open'}</Text>
+      <Text style={[parts.caption, { color: colors.secondary }]}>{live ? 'Items from your check-in call and ones you add here' : 'Sample meals · Edits last while this preview is open'}</Text>
       {MEALS.map((group) => {
         const items = entries.filter((entry) => entry.meal === group.key);
         return (
@@ -783,7 +812,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       })}
       <Card testID="calorie-log-total">
         <View style={styles.label}>
-          <Ionicons color={INK} name="flame" size={17} />
+          <Ionicons color={colors.ink} name="flame" size={17} />
           <Text style={parts.body}>Total Calories</Text>
         </View>
         <Text style={parts.title2}>{`${grouped(total)} / ${grouped(goal)} kcal`}</Text>
@@ -796,20 +825,20 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   const content: Record<CaloriePage, React.ReactNode> = { intro, time: timeSetup, goals: goalSetup, confirm: confirmation, ready, dashboard, insights, log: foodLog };
 
   return (
-    <View style={styles.fill} testID={`calorie-page-${page}`}>
-      <LinearGradient colors={[withAlpha('#AF52DE', 0.065), '#FFFFFF', withAlpha('#007AFF', 0.055)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+    <View style={[styles.fill, { backgroundColor: colors.background }]} testID={`calorie-page-${page}`}>
+      <LinearGradient colors={[withAlpha('#AF52DE', 0.065), colors.background, withAlpha('#007AFF', 0.055)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable accessibilityLabel="Back" accessibilityRole="button" onPress={back} style={styles.headerButton} testID="calorie-back">
-          <Ionicons color={INK} name="chevron-back" size={22} />
+          <Ionicons color={colors.ink} name="chevron-back" size={22} />
         </Pressable>
         <Text accessibilityRole="header" style={[parts.headline, styles.headerTitle]}>
           {TITLES[page](live)}
         </Text>
         <Pressable accessibilityLabel="Close calorie tracker" accessibilityRole="button" onPress={onClose} style={styles.headerButton} testID="calorie-close">
-          <Ionicons color={INK} name="close" size={22} />
+          <Ionicons color={colors.ink} name="close" size={22} />
         </Pressable>
       </View>
-      <Text style={[parts.caption, styles.status, { color: SECONDARY }]} testID="calorie-status">
+      <Text style={[parts.caption, styles.status, { color: colors.secondary }]} testID="calorie-status">
         {statusLine}
       </Text>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 20 + insets.bottom }]} key={page} keyboardShouldPersistTaps="handled">
@@ -817,8 +846,8 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       </ScrollView>
       {store.loading || working ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, parts.center]} testID="calorie-working">
-          <View style={styles.progress}>
-            <ActivityIndicator color={INK} />
+          <View style={[styles.progress, { backgroundColor: colors.dark ? 'rgba(44, 44, 46, 0.95)' : 'rgba(242, 242, 247, 0.95)' }]}>
+            <ActivityIndicator color={colors.ink} />
           </View>
         </View>
       ) : null}
@@ -845,23 +874,31 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   );
 }
 
+/** A field's ink, hairline and fill. */
+function fieldColors(colors: CalorieColors) {
+  return { color: colors.ink, borderColor: colors.separator, backgroundColor: colors.card };
+}
+
 function Divider() {
-  return <View style={styles.divider} />;
+  const colors = useCalorieColors();
+  return <View style={[styles.divider, { backgroundColor: colors.separator }]} />;
 }
 
 function ToggleRow({ label, value, onChange, testID }: { label: string; value: boolean; onChange: (next: boolean) => void; testID: string }) {
+  const colors = useCalorieColors();
   return (
     <View style={styles.row}>
       <Text style={[parts.body, parts.grow]}>{label}</Text>
-      <IOSSwitch accessibilityLabel={label} onValueChange={onChange} testID={testID} tint={SYSTEM_INDIGO} value={value} />
+      <IOSSwitch accessibilityLabel={label} onValueChange={onChange} testID={testID} tint={colors.accent} value={value} />
     </View>
   );
 }
 
 function SummaryLabel({ icon, text }: { icon: IconName; text: string }) {
+  const colors = useCalorieColors();
   return (
     <View style={styles.label}>
-      <Ionicons color={INK} name={icon} size={17} />
+      <Ionicons color={colors.ink} name={icon} size={17} />
       <Text style={parts.body}>{text}</Text>
     </View>
   );
@@ -873,6 +910,7 @@ function SummaryLabel({ icon, text }: { icon: IconName; text: string }) {
  */
 function GoalField({ label, value, onChange, testID }: { label: string; value: number; onChange: (next: number) => void; testID: string }) {
   const [text, setText] = useState(grouped(value));
+  const colors = useCalorieColors();
   return (
     <TextInput
       accessibilityLabel={label}
@@ -883,7 +921,7 @@ function GoalField({ label, value, onChange, testID }: { label: string; value: n
         setText(digits);
         onChange(digits === '' ? 0 : Number.parseInt(digits, 10));
       }}
-      style={styles.goalInput}
+      style={[styles.goalInput, fieldColors(colors)]}
       testID={testID}
       value={text}
     />
@@ -893,12 +931,16 @@ function GoalField({ label, value, onChange, testID }: { label: string; value: n
 /** `insightCard(_:)` (:779-801): today's one insight and its one action. */
 function InsightCard({ insight, onAct }: { insight: NutritionInsight; onAct: (add: boolean) => void }) {
   const gap = insight.kind === 'GAP';
+  const colors = useCalorieColors();
+  // `.borderedProminent` tinted `wellnessAccent`. Its white label is about 2:1 on the dark lilac, so in dark
+  // the label is black (Android's readable choice).
+  const onAccent = colors.dark ? '#000000' : '#FFFFFF';
   return (
     <Card testID="insight-card">
       <View style={styles.insightHeader}>
         <IconTile color={gap ? '#AF52DE' : '#FF9500'} name={gap ? 'sparkles' : insight.kind === 'STREAK' ? 'flame' : 'trending-up'} />
         <View style={parts.grow}>
-          <Text style={[parts.captionBold, { color: SECONDARY }]}>Today’s insight</Text>
+          <Text style={[parts.captionBold, { color: colors.secondary }]}>Today’s insight</Text>
           <Text style={parts.headline}>{insight.title}</Text>
           <Text style={parts.subheadline}>{insight.text}</Text>
         </View>
@@ -910,9 +952,9 @@ function InsightCard({ insight, onAct }: { insight: NutritionInsight; onAct: (ad
         </View>
       ) : insight.items.length > 0 ? (
         <View style={styles.row}>
-          <Pressable accessibilityRole="button" onPress={() => onAct(true)} style={styles.prominent} testID="insight-add">
-            <Ionicons color="#FFFFFF" name="cart" size={16} />
-            <Text style={[parts.subheadline, styles.prominentText]}>{`Add to ${insight.listTitle ?? 'shopping list'}`}</Text>
+          <Pressable accessibilityRole="button" onPress={() => onAct(true)} style={[styles.prominent, { backgroundColor: colors.accent }]} testID="insight-add">
+            <Ionicons color={onAccent} name="cart" size={16} />
+            <Text style={[parts.subheadline, styles.prominentText, { color: onAccent }]}>{`Add to ${insight.listTitle ?? 'shopping list'}`}</Text>
           </Pressable>
           <TextButton inline onPress={() => onAct(false)} testID="insight-dismiss" title="Not now" />
         </View>
@@ -925,6 +967,7 @@ function InsightCard({ insight, onAct }: { insight: NutritionInsight; onAct: (ad
 
 /** `foodRow(_:)` (:856-872). */
 function FoodRow({ food, onEdit, onRemove, onConfirm }: { food: NutritionEntry; onEdit: () => void; onRemove: () => void; onConfirm: () => void }) {
+  const colors = useCalorieColors();
   return (
     <View style={styles.food} testID={`calorie-food-${food.id}`}>
       <View style={styles.row}>
@@ -934,7 +977,7 @@ function FoodRow({ food, onEdit, onRemove, onConfirm }: { food: NutritionEntry; 
           <Text style={parts.caption}>{`${grouped(food.kcal)} kcal`}</Text>
         </Pressable>
         <Pressable accessibilityLabel={`Remove ${food.description}`} accessibilityRole="button" onPress={onRemove} style={styles.remove}>
-          <Ionicons color="#FF3B30" name="remove-circle-outline" size={20} />
+          <Ionicons color={colors.danger} name="remove-circle-outline" size={20} />
         </Pressable>
       </View>
       {needsReview(food) ? (
@@ -952,7 +995,7 @@ function FoodRow({ food, onEdit, onRemove, onConfirm }: { food: NutritionEntry; 
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#FFFFFF' },
+  fill: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center' },
@@ -961,9 +1004,11 @@ const styles = StyleSheet.create({
   centered: { textAlign: 'center' },
   // Full width, the picture centred in it (`CaloriePackArt`'s GeometryReader); `stretch` alone left Android at the intrinsic 218 wide.
   art: { alignSelf: 'stretch', width: '100%' },
+  darkArt: { alignItems: 'center', justifyContent: 'center' },
+  darkArtHeart: { position: 'absolute', left: 31, top: 30 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(60, 60, 67, 0.29)' },
+  divider: { height: StyleSheet.hairlineWidth },
   choice: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   goalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -972,24 +1017,18 @@ const styles = StyleSheet.create({
     width: 65,
     textAlign: 'right',
     fontSize: 17,
-    color: INK,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(60, 60, 67, 0.29)',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    backgroundColor: '#FFFFFF',
   },
   unit: { minWidth: 20 },
   input: {
     fontSize: 17,
-    color: INK,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(60, 60, 67, 0.29)',
     borderRadius: 5,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
   },
   readyIcon: { alignItems: 'center', paddingVertical: 20 },
   readyMask: { width: 80, height: 80 },
@@ -999,10 +1038,10 @@ const styles = StyleSheet.create({
   macros: { flexDirection: 'row', gap: 8 },
   nutrient: { gap: 8 },
   insightHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  prominent: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: SYSTEM_INDIGO, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  prominentText: { color: '#FFFFFF', fontWeight: '600' },
+  prominent: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  prominentText: { fontWeight: '600' },
   food: { gap: 6, paddingTop: 8 },
   remove: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   review: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  progress: { padding: 24, borderRadius: 16, backgroundColor: 'rgba(242, 242, 247, 0.95)' },
+  progress: { padding: 24, borderRadius: 16 },
 });

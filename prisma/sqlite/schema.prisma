@@ -858,6 +858,8 @@ model ShoppingEmailSchedule {
   recipientName String
   customerPhone String?
   timeZone String
+  sendDate String?
+  oneTimeQueued Boolean @default(false)
   weekday Int @default(6)
   hour Int @default(10)
   minute Int @default(0)
@@ -932,6 +934,8 @@ model BugReport {
   screenshot String?
   screenshotExpiresAt DateTime
   expiresAt DateTime
+  status String @default("open")
+  closedAt DateTime?
   emailSentAt DateTime?
   leaseUntil DateTime?
   nextAttemptAt DateTime @default(now())
@@ -961,4 +965,17 @@ model AiApiReceipt {
   pricing String?
   @@index([createdAt])
   @@index([operation, createdAt])
+}
+
+model QrOpen {
+  id        String   @id @default(cuid())
+  openedAt  DateTime
+  openedDay String
+  platform  String
+  model     String?
+  country   String?
+  region    String?
+  city      String?
+
+  @@index([openedAt, id])
 }

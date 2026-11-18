@@ -22,7 +22,7 @@ import { currentChoice, offerBadge, showsOffersShortcut } from '../../../src/fea
 import { StoreBrandLogo } from '../../../src/features/shopping/StoreBrandLogo';
 import { useShoppingOffers, useStoreHours } from '../../../src/query/useShoppingOffers';
 import { useAccessibilityTextSize } from '../../../src/features/wellness/useAccessibilityTextSize';
-import { ListSettingsSheet } from '../../../src/features/shopping/ListSettings';
+import { ListSettingsSheet, storeChanged } from '../../../src/features/shopping/ListSettings';
 import { NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
 import { VoiceSheet } from '../../../src/features/shopping/VoiceSheet';
@@ -93,12 +93,15 @@ export default function ShoppingDetailScreen() {
   const visibleItems = selectedCategory === 'All' ? list.items : list.items.filter((row) => row.category === selectedCategory);
 
   /**
-   * `save(_:)` (:365-373): show the change, then save it against the ORIGINAL revision — or, for a
-   * completed list, create a new list from it (new id, `completedAt` cleared, revision 0).
+   * `save(_:)` (:516-531): show the change, then save it against the ORIGINAL revision — or, for a
+   * completed list, create a new list from it (new id, `completedAt` cleared, revision 0). Since ce6d20a a
+   * changed store (name, website, place or logo) shows only once the server has it, since the logo lookup
+   * resolves the SAVED store by list id. Swift (ce6d20a) also puts the original back when a save fails;
+   * Android keeps the edit and offers Retry Save and Discard instead (the list error bar), as before.
    */
   const save = async (next: GroceryList) => {
     const original = list;
-    setList(next);
+    if (!storeChanged(original, next)) setList(next);
     let saved: GroceryList | null;
     if (original.completedAt != null) {
       const working: GroceryList = { ...next, id: Crypto.randomUUID().toUpperCase(), completedAt: null, revision: 0 };

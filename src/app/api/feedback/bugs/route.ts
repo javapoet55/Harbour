@@ -1,8 +1,48 @@
+import { z } from 'zod';
+import { prisma } from '@/server/db';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { consumeLimit } from '@/server/signup/abuse';
+import { closedBugReportStatuses } from '@/server/feedback/bug-status';
 import { bugSchema, saveBug } from '@/server/feedback/bugs';
 export const runtime = 'nodejs';
+const pageSize = 50;
+const cursorSchema = z.tuple([z.string().datetime(), z.string().uuid()]);
+
+export async function GET(req: Request) {
+  try {
+    const user = await requireUser();
+    const params = new URL(req.url).searchParams;
+    const status = params.get('status');
+    const rawCursor = params.get('cursor');
+    const cursor = rawCursor === null ? null : cursorSchema.safeParse(rawCursor.split(','));
+    if ((status !== 'open' && status !== 'closed') || (cursor && !cursor.success)) {
+      return Response.json({ error: 'Invalid bug report history request.' }, { status: 400 });
+    }
+    const [timestamp, id] = cursor?.data ?? [];
+    const createdAt = timestamp ? new Date(timestamp) : undefined;
+    const rows = await prisma.feedback.findMany({
+      where: {
+        userId: user.id,
+        bugReport: { expiresAt: { gt: new Date() }, status: status === 'closed' ? { in: [...closedBugReportStatuses] } : { notIn: [...closedBugReportStatuses] } },
+        ...(createdAt && id ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: id } }] } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: pageSize + 1,
+      select: { id: true, description: true, createdAt: true, bugReport: { select: { reference: true, status: true } } },
+    });
+    const page = rows.slice(0, pageSize);
+    const last = page.at(-1);
+    const reports = page.map(row => ({
+      id: row.id, description: row.description, createdAt: row.createdAt, reference: row.bugReport!.reference, status, detailedStatus: row.bugReport!.status,
+    }));
+    const nextCursor = rows.length > pageSize && last ? `${last.createdAt.toISOString()},${last.id}` : null;
+    return Response.json({ reports, nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
 // Bound the streamed body too; Content-Length is not trustworthy.
 export async function POST(req: Request) {
   try {

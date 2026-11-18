@@ -1,1 +1,1 @@
-export default function Loading(){return <p role="status">Loading System Health…</p>;}
+export default function Loading(){return <p className="admin-analytics-page" role="status">Loading System Health…</p>;}

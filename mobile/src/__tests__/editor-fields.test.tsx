@@ -13,6 +13,7 @@ const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
   useLocalSearchParams: () => mockParams(),
+  Stack: { Screen: () => null },
 }));
 
 const mockTasks = jest.fn();
@@ -172,14 +173,15 @@ describe('Creation editor date picker', () => {
 
 /** `ProjectAssignmentField` (ios/App/ProjectsView.swift:295-315). */
 describe('ProjectAssignmentField on the creation editor', () => {
-  it('starts on No project', async () => {
+  it('starts on No Named Folder, labelled Folder (2991151)', async () => {
     await wrap(<NewTask />);
     await waitFor(() => expect(mockProjects).toHaveBeenCalled());
 
-    expect(screen.getByTestId('project-field').props.accessibilityValue.text).toBe('No project');
+    expect(screen.getByTestId('project-field').props.accessibilityValue.text).toBe('No Named Folder');
+    expect(screen.getByTestId('project-field').props.accessibilityLabel).toBe('Folder');
   });
 
-  it('lists every project by name, plus No project', async () => {
+  it('lists every project by name, plus No Named Folder', async () => {
     await wrap(<NewTask />);
     await waitFor(() => expect(mockProjects).toHaveBeenCalled());
 
@@ -188,6 +190,7 @@ describe('ProjectAssignmentField on the creation editor', () => {
     await waitFor(() => expect(screen.getByTestId('project-option-p1')).toBeTruthy());
     expect(screen.getByTestId('project-option-p2')).toBeTruthy();
     expect(screen.getByTestId('project-option-none')).toBeTruthy();
+    expect(screen.getByTestId('project-option-none').props.accessibilityLabel).toBe('No Named Folder');
   });
 
   it('sets a real projectId on the submitted body', async () => {
@@ -214,7 +217,7 @@ describe('ProjectAssignmentField on the creation editor', () => {
     await waitFor(() => expect(screen.getByTestId('project-field').props.accessibilityValue.text).toBe('Zurich trip'));
   });
 
-  it('can be set back to No project', async () => {
+  it('can be set back to No Named Folder', async () => {
     mockCreateTask.mockResolvedValue({ task: task({ id: 'new' }) });
     await wrap(<NewTask />);
     await waitFor(() => expect(mockProjects).toHaveBeenCalled());

@@ -29,10 +29,10 @@ export default function EditProject() {
         {projects.isLoading ? (
           <>
             <ActivityIndicator />
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Loading projects…</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Loading folders…</Text>
           </>
         ) : (
-          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>This project is no longer in your list.</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>This folder is no longer in your list.</Text>
         )}
       </View>
     );

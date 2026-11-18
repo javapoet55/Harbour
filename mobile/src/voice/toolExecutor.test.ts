@@ -26,6 +26,7 @@ function build({
   consent = () => ({ ai: true, voice: true }),
   resolve = jest.fn(),
   tasks = [] as NexdoTask[],
+  projectId = undefined as string | undefined,
 } = {}) {
   // `gcTime: 0` so the cache schedules no garbage-collection timer. Without it every cached query
   // leaves a five-minute `setTimeout` behind and Jest force-exits the worker.
@@ -40,6 +41,7 @@ function build({
     currentOwnerId,
     uuid: () => `token-${++ids}`,
     resolve: resolve as never,
+    projectId,
   });
   return { executor, queryClient, resolve };
 }
@@ -48,6 +50,43 @@ beforeEach(() => {
   mockRequest.mockReset();
   resetRevisions();
   useCalendarNotice.setState({ notice: null });
+});
+
+/**
+ * 08a64da "Keep voice-created tasks in the selected folder" (NexdoApp.swift:613-615; VoiceToolExecutor.swift:11-13,
+ * :41): the folder rides beside the arguments, never inside them, and only on create_task / create_reminder.
+ */
+describe('a selected folder (Phase 15, 08a64da)', () => {
+  it.each(['create_task', 'create_reminder'])('sends projectId at the top level of %s', async (name) => {
+    mockRequest.mockResolvedValue({ success: true });
+    const { executor } = build({ projectId: 'folder-1' });
+
+    await executor.execute({ name, args: { title: 'Review estimates' }, sessionId: 's1', callId: 'c1' });
+
+    expect(mockRequest).toHaveBeenCalledWith('/api/realtime/tool', {
+      method: 'POST',
+      body: { consent: true, scope: 'general', sessionId: 's1', callId: 'c1', name, projectId: 'folder-1', arguments: { title: 'Review estimates' } },
+      timeoutMs: 30_000,
+    });
+  });
+
+  it.each(['update_task', 'get_schedule', 'delete_task'])('leaves it off %s, which the server would refuse', async (name) => {
+    mockRequest.mockResolvedValue({ success: true });
+    const { executor } = build({ projectId: 'folder-1' });
+
+    await executor.execute({ name, args: {}, sessionId: 's1', callId: 'c1' });
+
+    expect(mockRequest.mock.calls[0][1].body).not.toHaveProperty('projectId');
+  });
+
+  it('sends no projectId when no folder was chosen', async () => {
+    mockRequest.mockResolvedValue({ success: true });
+    const { executor } = build();
+
+    await executor.execute({ name: 'create_task', args: { title: 'Ship it' }, sessionId: 's1', callId: 'c1' });
+
+    expect(mockRequest.mock.calls[0][1].body).not.toHaveProperty('projectId');
+  });
 });
 
 describe('the server round trip', () => {

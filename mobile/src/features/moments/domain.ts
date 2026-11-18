@@ -792,6 +792,17 @@ export function managementFilterIncludes(filter: ManagementFilter, group: Moment
 }
 
 /**
+ * How many moments need review, counted once for both screens that show it: the groups Manage Moments lists
+ * under Need Review, among `moments`. Android ahead of iOS (§24 bug 3): Swift's Upcoming card counts
+ * recipients (`displayed.filter(\.needsWishReview)`) and leaves out paused moments, while Manage Moments
+ * counts groups and includes them, so one account read "11 wishes need review" beside "Need Review (10)".
+ * The card passes the moments it shows, so search and the type filter still narrow it.
+ */
+export function needReviewCount(moments: ImportantMoment[]): number {
+  return displayGroups(moments.filter((moment) => !isArchived(moment))).filter((group) => managementFilterIncludes('Need Review', group)).length;
+}
+
+/**
  * `managementDate(_:)` (ManageFestivalView.swift:18-22): the latest of each recipient's scheduled send,
  * or its occasion when nothing is scheduled.
  */

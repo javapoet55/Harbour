@@ -48,7 +48,10 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    const nextList=await tx.shoppingList.create({data:{userId,title:list.title,storeLogoData:list.storeLogoData,storeName:list.storeName,storeAddress:list.storeAddress,storeZip:list.storeZip,storePlaceId:list.storePlaceId,storeWebsite:list.storeWebsite,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
    await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{updatedAt:new Date()}});
    const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
-   if(schedule){
+   if(schedule?.sendDate){
+    await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{enabled:false}});
+    await tx.shoppingEmailRun.updateMany({where:{scheduleId:schedule.id,status:'pending'},data:{status:'cancelled',detail:'Shopping trip completed'}});
+   }else if(schedule){
     // A trip finished before its email went out skips that week instead of emailing next week's list early.
     const attached=new Date(Math.max(list.createdAt.getTime(),schedule.createdAt.getTime()));
     const skip=schedule.enabled&&!await tx.shoppingEmailRun.count({where:{scheduleId:schedule.id,dueAt:{gte:attached}}});

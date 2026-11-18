@@ -20,15 +20,15 @@ export default async function AdminEngagementPage({ searchParams }: { searchPara
   const range = parseAdminDateRange(params.from, params.to);
   const result = await adminData(`/api/admin/engagement?${rangeQuery(range)}`, engagementResultSchema);
   const heading = <PageHeading title="Firebase Engagement" description="App usage and engagement reported by Google Analytics for Firebase."><AdminDateRangeFilter key={`${range.from}-${range.to}`} from={range.from} to={range.to} today={new Date().toISOString().slice(0, 10)} label={adminDateRangeLabel(range)} pathname="/engagement"/></PageHeading>;
-  if (result.status !== 'connected') return <>{heading}<div className="admin-callout" role="status"><Activity/><div><strong>{result.status === 'not_configured' ? 'Connection needed' : 'Reporting unavailable'}</strong><p>{result.message}</p></div></div>
+  if (result.status !== 'connected') return <div className="admin-analytics-page">{heading}<div className="admin-callout" role="status"><Activity/><div><strong>{result.status === 'not_configured' ? 'Connection needed' : 'Reporting unavailable'}</strong><p>{result.message}</p></div></div>
     <Panel title="Connect Firebase engagement"><p>Reports load here after backend activation. Opening Google Analytics below does not connect this portal.</p><p>This report uses the Google Analytics Data API with read-only access. A Firebase app configuration file or Google account password cannot authorize these reports.</p>
       <ol><li>Use Nexdo’s verified GA4 property ID: 555023551.</li><li>Enable the Google Analytics Data API in the service account’s Cloud project.</li><li>Give a dedicated service account Viewer access to that GA4 property.</li><li>Configure GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON as server secrets. Optionally set GA4_STREAM_ID to restrict reports to one app stream.</li></ol>
       <a href={consoleURL} target="_blank" rel="noreferrer">Open Google Analytics reports ↗</a><p>Use nexdoai@gmail.com, which has access to this property. If Google opens another account, switch accounts in Google Analytics.</p>
-    </Panel></>;
+    </Panel></div>;
   const { data } = result;
   const m = data.summary;
   const active = m.activeUsers ?? 0;
-  return <>{heading}
+  return <div className="admin-analytics-page">{heading}
     <div className="admin-callout"><Activity/><div><strong>Connected · GA4 property {data.propertyId} · {data.streamId ? `App stream ${data.streamId}` : 'iOS app engagement'}</strong><p>Dates use {data.timeZone}. Fetched {new Date(data.fetchedAt).toLocaleString('en-US', { timeZone: 'UTC' })} UTC; reports refresh after five minutes. Recent activity may take time to appear in Google Analytics.</p><p>These are aggregate app analytics, not named Nexdo account activity. Consent, device identity, and reporting rules can make counts differ from Usage Analytics.</p>{data.limited && <p role="status">Google applied privacy thresholds, sampling, or grouped rows. Some data may be limited.</p>}</div></div>
     <div className="admin-metrics">
       <MetricCard icon={<Users/>} value={formatNumber(active)} label="Active users" note="Unique users across the selected period"/>
@@ -47,5 +47,5 @@ export default async function AdminEngagementPage({ searchParams }: { searchPara
       <Panel title="Screens · top 20" className="admin-span-6"><Breakdown rows={data.screens} dimension="Screen class" metrics={[["screenPageViews", "Views"], ["activeUsers", "Users"]]}/><p>Screen names reflect the events currently sent by the app.</p></Panel>
     </div>
     <p><a href={consoleURL} target="_blank" rel="noreferrer">Open Google Analytics reports ↗</a></p>
-  </>;
+  </div>;
 }

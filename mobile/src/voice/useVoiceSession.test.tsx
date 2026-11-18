@@ -24,20 +24,21 @@ jest.mock('./nativeDriver', () => ({ isWebRtcAvailable: () => true, createNative
 jest.mock('./transport', () => ({ WebRtcTransport: jest.fn().mockImplementation(() => ({ applyVolume: jest.fn() })) }));
 jest.mock('./toolExecutor', () => ({ VoiceToolExecutor: jest.fn().mockImplementation(() => ({ clear: jest.fn() })) }));
 
-type FakeConversation = { options: ConversationOptions; phase: VoicePhase; closed: boolean };
+type FakeConversation = { options: ConversationOptions; phase: VoicePhase; closed: boolean; starts: number };
 const mockConversations: FakeConversation[] = [];
 jest.mock('./conversation', () => {
   const actual = jest.requireActual('./conversation');
   class VoiceConversation {
     private readonly fake: FakeConversation;
     constructor(options: ConversationOptions) {
-      this.fake = { options, phase: 'idle', closed: false };
+      this.fake = { options, phase: 'idle', closed: false, starts: 0 };
       mockConversations.push(this.fake);
     }
     get snapshot() {
       return { ...actual.INITIAL_STATE, phase: this.fake.phase };
     }
     start() {
+      this.fake.starts += 1;
       this.fake.phase = 'connecting';
     }
     tick() {}
@@ -57,6 +58,7 @@ jest.mock('./conversation', () => {
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import { MICROPHONE_DENIED } from '../lib/permissionAccess';
 import { useVoiceSession, type UseVoiceSession } from './useVoiceSession';
+import { VoiceToolExecutor } from './toolExecutor';
 
 function Probe() {
   useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined });
@@ -170,5 +172,142 @@ describe('useVoiceSession microphone gate', () => {
     expect(mockRequest).not.toHaveBeenCalled();
     expect(result.current?.startupError).toBe(MICROPHONE_DENIED);
     expect(result.current?.microphoneDenied).toBe(true);
+  });
+});
+
+/** dc6445c / 7b37ab1 (AddTaskByVoiceView.swift:315-341): `start()` is guarded and can be run again. */
+describe('useVoiceSession start', () => {
+  async function capture() {
+    const resultRef: { current?: UseVoiceSession } = {};
+    function Capture({ onResult }: { onResult: (value: UseVoiceSession) => void }) {
+      onResult(useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined }));
+      return null;
+    }
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Capture onResult={(value) => (resultRef.current = value)} />
+      </QueryClientProvider>,
+    );
+    return { view, result: resultRef };
+  }
+
+  async function settle() {
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+  }
+
+  it('does not open a session if the screen closed while the credential loaded (`guard isVisible`)', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    mockRequest.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)) as never);
+    const { view } = await capture();
+    await settle();
+    const conversation = mockConversations[0];
+    await act(async () => view.unmount());
+    await act(async () => answer({ value: 'ek', expiresAt: 9e9, model: 'm' }));
+    await settle();
+    expect(conversation.starts).toBe(0);
+  });
+
+  it('starts once however often Start listening is pressed, and not over a live session', async () => {
+    mockRequest.mockClear();
+    const { result } = await capture();
+    await act(async () => {
+      result.current?.start();
+      result.current?.start();
+    });
+    await settle();
+    expect(mockConversations[0].starts).toBe(1);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+
+    await act(async () => result.current?.start());
+    await settle();
+    expect(mockConversations[0].starts).toBe(1);
+  });
+
+  it('runs start() again from idle, clearing the last error', async () => {
+    mockRequest.mockClear();
+    mockRequest.mockRejectedValueOnce(new Error('offline') as never);
+    const { result } = await capture();
+    await settle();
+    expect(result.current?.startupError).toBe('Couldn’t start voice. Close this screen and try again.');
+    expect(mockConversations[0].starts).toBe(0);
+
+    await act(async () => result.current?.start());
+    await settle();
+    expect(result.current?.startupError).toBeNull();
+    expect(mockConversations[0].starts).toBe(1);
+  });
+});
+
+/** 08a64da: `VoiceSessionResources(projectID:)` hands the folder to the executor (AddTaskByVoiceView.swift:42-43). */
+describe('useVoiceSession folder (Phase 15)', () => {
+  function FolderProbe({ projectId }: { projectId?: string }) {
+    useVoiceSession({ scope: 'general', enabled: true, onClose: () => undefined, projectId });
+    return null;
+  }
+
+  it('builds the executor with the selected folder, and with none by default', async () => {
+    const executor = VoiceToolExecutor as unknown as jest.Mock;
+    executor.mockClear();
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FolderProbe projectId="folder-1" />
+      </QueryClientProvider>,
+    );
+    expect(executor.mock.calls[0][0]).toMatchObject({ projectId: 'folder-1', scope: 'general' });
+    // Unmount before startup reaches the credential request, so nothing leaks into the next test.
+    await view.unmount();
+
+    executor.mockClear();
+    const plain = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FolderProbe />
+      </QueryClientProvider>,
+    );
+    expect(executor.mock.calls[0][0].projectId).toBeUndefined();
+    await plain.unmount();
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+    mockRequest.mockClear();
+  });
+});
+
+/**
+ * 4fa8e21 `voice.onClose = nil` before `voice.close()` (AddTaskByVoiceView.swift:263-271): the session's close
+ * lands a tick after teardown, and must not dismiss whatever screen is showing by then.
+ */
+describe('useVoiceSession close after unmount (Phase 15)', () => {
+  it('reports a close while mounted, and none once the screen has gone', async () => {
+    const onClose = jest.fn();
+    function CloseProbe() {
+      useVoiceSession({ scope: 'general', enabled: true, onClose });
+      return null;
+    }
+    const before = mockConversations.length;
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CloseProbe />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // The one this render built (the newest), whatever an earlier test left behind.
+    expect(mockConversations.length).toBeGreaterThan(before);
+    const conversation = mockConversations[mockConversations.length - 1];
+
+    conversation.options.onClose?.();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await view.unmount();
+    conversation.options.onClose?.();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+    mockRequest.mockClear();
   });
 });

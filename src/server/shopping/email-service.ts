@@ -2,7 +2,7 @@ import {prisma} from '@/server/db';
 import {log} from '@/lib/logger';
 import {MomentError} from '@/server/moments/domain';
 import {gmail,emailConfigured, type WishEmailProvider} from '@/server/moments/email';
-import {nextWeekly,scheduleInput,shoppingEmail} from './email-domain';
+import {nextWeekly,oneTimeSendAt,scheduleInput,shoppingEmail} from './email-domain';
 const WEEK_MS=7*86400000;
 const active=()=>process.env.SHOPPING_EMAIL_ENABLED==='true';
 async function owned(userId:string,listId:string){
@@ -15,15 +15,21 @@ export async function emailSchedule(userId:string,listId:string){
   prisma.shoppingEmailSchedule.findUnique({where:{listId},include:{runs:{orderBy:{dueAt:'desc'},take:10}}}),
   prisma.momentEmailAccount.findUnique({where:{userId},select:{email:true,status:true}}),
  ]);
- return {schedule,account,available:active()&&emailConfigured()};
+ return {schedule,account,supportsOneTime:true,available:active()&&emailConfigured()};
 }
 export async function saveEmailSchedule(userId:string,listId:string,raw:unknown,now=new Date()){
  const input=scheduleInput.parse(raw);const list=await owned(userId,listId);
  if(list.completedAt)throw new MomentError('Schedule email on your current shopping list.');
- if(!active()||!emailConfigured())throw new MomentError('Weekly shopping email is not enabled on this server.',503);
+ if(!active()||!emailConfigured())throw new MomentError('Scheduled shopping email is not enabled on this server.',503);
  const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
  if(account?.status!=='connected')throw new MomentError('Connect your Gmail account before scheduling.',409);
- const {consent,...settings}=input;void consent;
+ const {consent,sendDate=null,...settings}=input;void consent;
+ const onceAt=sendDate?oneTimeSendAt({...settings,sendDate}):null;
+ if(sendDate&&(!onceAt||onceAt<=now))throw new MomentError('Choose a future send date and time that exists in the selected timezone.');
+ if(onceAt&&settings.pickupDate&&settings.pickupStartHour!=null){
+  const pickupAt=oneTimeSendAt({...settings,sendDate:settings.pickupDate,hour:settings.pickupStartHour,minute:0});
+  if(!pickupAt||pickupAt<=onceAt)throw new MomentError('Choose a pickup window that starts after the send time.');
+ }
  return prisma.$transaction(async tx=>{
   await tx.shoppingEmailSchedule.updateMany({where:{listId},data:{updatedAt:now}});
   const previous=await tx.shoppingEmailSchedule.findUnique({where:{listId}});
@@ -32,9 +38,9 @@ export async function saveEmailSchedule(userId:string,listId:string,raw:unknown,
    await tx.shoppingEmailRun.updateMany({where:{scheduleId:previous.id,status:'pending'},data:{status:'cancelled',detail:'Schedule changed'}});
   }
   // Editing after this week's email went out (or was skipped) must not send another one within the same 7 days.
-  const last=previous&&await tx.shoppingEmailRun.findFirst({where:{scheduleId:previous.id,status:{in:['sent','uncertain','skipped']}},orderBy:{dueAt:'desc'}});
-  const nextRunAt=nextWeekly(last?new Date(Math.max(now.getTime(),last.dueAt.getTime()+WEEK_MS-1)):now,settings);
-  return tx.shoppingEmailSchedule.upsert({where:{listId},create:{listId,...settings,consentAt:now,nextRunAt},update:{...settings,enabled:true,consentAt:now,nextRunAt}});
+  const last=!sendDate&&previous&&!previous.sendDate&&await tx.shoppingEmailRun.findFirst({where:{scheduleId:previous.id,status:{in:['sent','uncertain','skipped']}},orderBy:{dueAt:'desc'}});
+  const nextRunAt=onceAt??nextWeekly(last?new Date(Math.max(now.getTime(),last.dueAt.getTime()+WEEK_MS-1)):now,settings);
+  return tx.shoppingEmailSchedule.upsert({where:{listId},create:{listId,...settings,sendDate,consentAt:now,nextRunAt},update:{...settings,sendDate,oneTimeQueued:false,enabled:true,consentAt:now,nextRunAt}});
  });
 }
 export async function pauseEmailSchedule(userId:string,listId:string){
@@ -59,14 +65,14 @@ const RUN_RETENTION_MS=90*86400000, TERMINAL=['sent','skipped','cancelled','fail
 const errorName=(e:unknown)=>e instanceof Error?e.name:'Error';
 // Token refresh plus send can take ~35s, so new sends stop early enough to finish within the worker's 55s request timeout.
 const SEND_BUDGET_MS=20000, SEND_CONCURRENCY=5, QUEUE_BATCH=50;
-type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date;pickupDate:string|null;pickupStartHour:number|null;customerPhone:string|null};
+type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date;sendDate:string|null;pickupDate:string|null;pickupStartHour:number|null;customerPhone:string|null};
 async function queueRun(s:DueSchedule,now:Date){
  await prisma.$transaction(async tx=>{
-  const claim=await tx.shoppingEmailSchedule.updateMany({where:{id:s.id,enabled:true,nextRunAt:s.nextRunAt},data:{nextRunAt:nextWeekly(now,s)}});
+  const claim=await tx.shoppingEmailSchedule.updateMany({where:{id:s.id,enabled:true,nextRunAt:s.nextRunAt,sendDate:s.sendDate,oneTimeQueued:false},data:s.sendDate?{oneTimeQueued:true}:{nextRunAt:nextWeekly(now,s)}});
   if(!claim.count)return;
   const list=await tx.shoppingList.findUniqueOrThrow({where:{id:s.listId},include:{items:{orderBy:{sortOrder:'asc'}}}});
   const sender=await tx.user.findUniqueOrThrow({where:{id:list.userId},select:{name:true}});
-  const mail=shoppingEmail(s.recipientName,list.items,{pickupDate:s.pickupDate,pickupStartHour:s.pickupStartHour,timeZone:s.timeZone,runAt:now},{name:sender.name,phoneNumber:s.customerPhone});
+  const mail=shoppingEmail(s.recipientName,list.items,{pickupDate:s.pickupDate,pickupStartHour:s.pickupStartHour,timeZone:s.timeZone,runAt:now,repeat:!s.sendDate},{name:sender.name,phoneNumber:s.customerPhone});
   const stale=now.getTime()-s.nextRunAt.getTime()>24*3600000;
   // Schedules saved before the phone field existed keep sending; the signature just omits the number.
   const skip=mail.empty||!!list.completedAt||stale;
@@ -100,11 +106,11 @@ export async function runShoppingEmails(now=new Date(),provider:WishEmailProvide
  // A crashed sender may already have submitted: do not risk sending the same email twice.
  await prisma.shoppingEmailRun.updateMany({where:{status:'sending',updatedAt:{lt:new Date(now.getTime()-10*60000)}},data:{status:'uncertain',detail:'Delivery could not be verified. Check your Gmail Sent folder.'}});
  await prisma.shoppingEmailRun.deleteMany({where:{status:{in:TERMINAL},retryAt:{lt:new Date(now.getTime()-RUN_RETENTION_MS)}}});
- // Every queued schedule moves to next week, so this drains all due schedules. A schedule that errors is
- // left due for the next tick and skipped for the rest of this one, so it cannot hold up everyone else.
+ // A queued schedule is advanced or marked as queued, so every due schedule is visited only once.
+ // Failed schedules stay due for the next tick without holding up other schedules.
  const failedSchedules:string[]=[];
  for(;;){
-  const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,nextRunAt:{lte:now},id:{notIn:failedSchedules}},take:QUEUE_BATCH,orderBy:{nextRunAt:'asc'}});
+  const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,oneTimeQueued:false,nextRunAt:{lte:now},id:{notIn:failedSchedules}},take:QUEUE_BATCH,orderBy:{nextRunAt:'asc'}});
   for(const s of due)await queueRun(s,now).catch(e=>{failedSchedules.push(s.id);log('error','shopping_email_queue_failed',{scheduleId:s.id,error:errorName(e)})});
   if(due.length<QUEUE_BATCH)break;
  }
@@ -113,5 +119,8 @@ export async function runShoppingEmails(now=new Date(),provider:WishEmailProvide
  await Promise.all(Array.from({length:SEND_CONCURRENCY},async()=>{
   while(Date.now()<deadline){const r=await sendNext(now,provider,failedRuns);if(r==='empty')return;if(r==='processed')processed++;}
  }));
+ // Keep one-time schedules enabled while a queued email can still be sent or retried.
+ await prisma.shoppingEmailSchedule.updateMany({where:{enabled:true,oneTimeQueued:true,
+  runs:{none:{status:{in:['pending','sending']}}}},data:{enabled:false}});
  return {processed};
 }

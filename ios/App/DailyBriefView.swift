@@ -25,10 +25,8 @@ struct DailyBriefView: View {
     let close: () -> Void
     let ask: (String) -> Void
     let voice: () -> Void
-    let read: (Int, String) -> Void
-    let readingSection: Int?
-    /// Why Read aloud could not start (no OpenAI sharing, a voice failure). The composer that shows it elsewhere is hidden here.
-    var readError: String? = nil
+    let stopVoiceReply: () -> Void
+    let voiceReplyError: String?
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedSection: SectionRoute?
     /// Keyed by the section's title, not its position: completing the last task a section names removes it from
@@ -72,7 +70,7 @@ struct DailyBriefView: View {
                 .background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1))
 
-            if let readError { ReadAloudError(message: readError) }
+            if let voiceReplyError { ReadAloudError(message: voiceReplyError) }
             ForEach(Array(visibleSections.enumerated()), id: \.offset) { index, section in
                 sectionCard(index, section)
             }
@@ -110,10 +108,9 @@ struct DailyBriefView: View {
             }
             .fullScreenCover(item: $selectedSection) { route in
                 // A section that has emptied keeps its page: the title, "Nothing to report here today." and Back.
-                let index = visibleSections.firstIndex { $0.title == route.id }
-                BriefSectionDetailView(title: style(route.id).0,
-                    items: index.map { visibleSections[$0].items } ?? [], readError: readError, ask: ask,
-                    read: { if let index { read(index, visibleSections[index].items.joined(separator: "\n\n")) } })
+                let items = visibleSections.first { $0.title == route.id }?.items ?? []
+                BriefSectionDetailView(title: style(route.id).0, items: items, ask: ask,
+                    stopVoiceReply: stopVoiceReply)
             }
     }
 
@@ -221,7 +218,7 @@ private struct BriefArtwork: View {
     }
 }
 
-/// A Read aloud failure, shown where Read aloud was tapped.
+/// An audio playback error displayed in the briefing.
 struct ReadAloudError: View {
     let message: String
     var body: some View {

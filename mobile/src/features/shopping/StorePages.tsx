@@ -13,6 +13,7 @@ import { brand, inputText, linearGradientStops, textStyles, useTheme } from '../
 import { headline } from '../moments/components';
 import { FormButton, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
 import { useMinuteTick } from '../../lib/useMinuteTick';
+import { StoreBrandLogo } from './StoreBrandLogo';
 import { storeHoursRowIsToday, storeHoursRowLabel } from './storeHoursDay';
 
 /**
@@ -206,9 +207,15 @@ export function StoreFinderPage({ initialArea, onSelect }: { initialArea: string
         ) : null}
         {suggestions.map((suggestion) => (
           <View key={suggestion.id} style={[styles.storeCard, { backgroundColor: theme.colors.surface }]} testID={`store-${suggestion.id}`}>
-            <View style={[styles.storeIcon, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}>
-              <Ionicons color={theme.colors.link} name="storefront" size={24} />
-            </View>
+            {/* ce6d20a (ShoppingViews.swift:754-756): the server's `brand` logo for the row, never a lookup;
+                the green cart without one. */}
+            <StoreBrandLogo
+              automaticLookup={false}
+              identity={`${suggestion.name}|${suggestion.website ?? ''}`}
+              listId={`search-${suggestion.id}`}
+              size={48}
+              suppliedBrand={suggestion.brand ?? null}
+            />
             <View style={[styles.grow, styles.storeText]}>
               <Text style={[headline, { color: theme.colors.ink }]}>{suggestion.name}</Text>
               <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>{suggestion.address}</Text>
@@ -332,7 +339,6 @@ const styles = StyleSheet.create({
   noStores: { alignItems: 'center', gap: 10, padding: 20, borderRadius: 20 },
   noStoresIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   storeCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 20 },
-  storeIcon: { width: 48, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   storeText: { gap: 5, alignItems: 'flex-start' },
   add: { paddingHorizontal: 22, paddingVertical: 9, borderRadius: 999 },
   attribution: { marginHorizontal: 32, marginTop: 4 },

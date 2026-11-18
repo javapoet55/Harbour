@@ -75,7 +75,7 @@ export function VoiceUsageCard({ usage }: { usage: VoiceUsage | undefined }) {
           <Text style={[styles.headline, { color: theme.colors.ink }]}>Real-time Voice</Text>
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Monthly usage</Text>
         </View>
-        <Text style={[styles.total, { color: theme.colors.link }]} testID="voice-usage-total">
+        <Text style={[styles.total, { color: theme.colors.actionForeground }]} testID="voice-usage-total">
           {voiceMinutes(used)}
         </Text>
       </View>

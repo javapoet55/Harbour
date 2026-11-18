@@ -221,7 +221,7 @@ struct TaskDetailsView: View {
                 HStack(spacing: 10) {
                     taskIcon("folder", color: .orange)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Project").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        Text("Folder").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         ProjectAssignmentField(projectID: $draft.projectId)
                     }
                 }

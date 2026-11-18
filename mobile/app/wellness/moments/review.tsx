@@ -14,7 +14,7 @@ import { Disclosure, FormToggle } from '../../../src/features/moments/form';
 import { rememberDraft } from '../../../src/features/moments/handoff';
 import { MomentGreetingCardSection } from '../../../src/features/moments/MomentGreetingCardSection';
 import { momentsStore, useMoments } from '../../../src/features/moments/store';
-import { isAndroid, textStyles, useTheme } from '../../../src/theme';
+import { isAndroid, textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
 
@@ -25,8 +25,10 @@ const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
  *
  * On open it reuses the latest draft unless that draft is already PLANNED; otherwise it generates one.
  */
-export default function ReviewWishScreen() {
+function ReviewWishScreen() {
   const theme = useTheme();
+  // Toolbar items keep the app's `link`, readable in dark on Android (§24 bug 4), not the Wellness tint.
+  const toolbarLink = useTheme({ toolbar: true }).colors.link;
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [moment] = useState<ImportantMoment | undefined>(() => momentsStore.getState().snapshot?.moments.find((item) => item.id === id));
   const busy = useMoments((state) => state.busy);
@@ -98,7 +100,7 @@ export default function ReviewWishScreen() {
           headerRight: () => (
             <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={6} testID="review-cancel">
               <GlassCapsule>
-                <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Cancel</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: toolbarLink }}>Cancel</Text>
               </GlassCapsule>
             </Pressable>
           ),
@@ -184,3 +186,6 @@ const styles = StyleSheet.create({
   // The current draft stays readable, dimmed, until the new one replaces it.
   writing: { opacity: 0.5 },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ReviewWishScreen);

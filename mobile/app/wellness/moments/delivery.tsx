@@ -17,7 +17,7 @@ import { capitalized, composerPlanAction, momentIcon } from '../../../src/featur
 import { findDraft, findPlan, rememberPlan } from '../../../src/features/moments/handoff';
 import { momentsStore, useMoments } from '../../../src/features/moments/store';
 import { WishEmailConfirmation } from '../../../src/features/moments/WishEmailConfirmation';
-import { textStyles, useTheme } from '../../../src/theme';
+import { textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 const CHANNELS = [
   { id: 'messages', title: 'Messages', icon: 'chatbubble' },
@@ -36,7 +36,7 @@ type Timing = 'Now' | 'Schedule' | 'Remind me later';
  * `failed` / `cancel`, `copied`, `shared` — while Email is sent by the server. A "now" delivery is
  * scheduled with `sendNow: true` first, so there is a plan to report against.
  */
-export default function ChooseDeliveryScreen() {
+function ChooseDeliveryScreen() {
   const theme = useTheme();
   const { momentId, draftId } = useLocalSearchParams<{ momentId?: string; draftId?: string }>();
   const [moment] = useState<ImportantMoment | undefined>(() => momentsStore.getState().snapshot?.moments.find((item) => item.id === momentId));
@@ -213,3 +213,6 @@ const styles = StyleSheet.create({
   prominent: { minHeight: 52, borderRadius: 999, justifyContent: 'center' },
   centerLabel: { textAlign: 'center', alignSelf: 'stretch' },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ChooseDeliveryScreen);

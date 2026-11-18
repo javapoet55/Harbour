@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Image, Linking, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { bugReportApi, type BugReportStatus, type SubmittedBugReport } from '../../api/feedback';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { GlassCircle } from '../../components/PushedHeader';
+import { SettingsSegments } from '../../components/SettingsControls';
 import { StickyFooter } from '../../components/StickyFooter';
 import { TaskSymbol } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
@@ -19,8 +21,10 @@ import {
   BUG_FAILURE,
   bugDraftValid,
   bugFailureMessage,
+  bugReportStatusTitle,
   bugSubmission,
   clampBugDescription,
+  historyFailureMessage,
   includeScreenshot,
   newBugDraft,
   removeScreenshot,
@@ -32,7 +36,16 @@ import {
  * "Report app issue" form and the success page, in one full-screen modal over the screen it was opened
  * from (`overFullScreen`, `isModalInPresentation`). The data layer is §32's: `model.ts` for the draft,
  * the frozen retry and the failure messages, `bugReportApi` for the request.
+ *
+ * fbe38a9 / a61b01a: opened from Settings (screen `settings`), the first page is **Report Bugs**, the account's
+ * open and closed reports (`history`, :92-112), and Done after sending comes back to it.
  */
+
+/** `Picker("Report status")` over `BugReportStatus.allCases` (:94-100). */
+const HISTORY_STATUSES = [
+  { value: 'open', title: 'Open' },
+  { value: 'closed', title: 'Closed' },
+] as const;
 
 /** `Color(red: 0.39, green: 0.40, blue: 0.95)` (:21). */
 export const BUG_ACCENT = '#6366F2';
@@ -72,9 +85,12 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  // `historyStatus` and `showsHistory` (:21-22).
+  const [historyStatus, setHistoryStatus] = useState<BugReportStatus>('open');
   const sending = submit.isPending;
   const sendingRef = useRef(false);
   const { diagnostics } = session;
+  const showsHistory = diagnostics.screen === 'settings';
 
   // `finish()` (:197): the draft goes with the report.
   const finish = () => {
@@ -156,11 +172,26 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
   const formInvalid = reference === null && editing && !bugDraftValid(draft);
   const primaryTitle = reference !== null ? 'Done' : editing ? (error !== null && draft.frozen !== null ? 'Retry Send' : 'Send') : 'Report Bug';
   const primary = () => {
-    if (reference !== null) finish();
-    else if (editing) send();
+    if (reference !== null) {
+      // `if showsHistory { editing = false; historyStatus = .open; copied = false; reference = nil }` (:42-49).
+      if (showsHistory) {
+        setEditing(false);
+        setHistoryStatus('open');
+        setCopied(false);
+        setReference(null);
+      } else finish();
+    } else if (editing) send();
     else setEditing(true);
   };
   const frozen = draft.frozen !== null;
+  // `shakeToggle` (:107-112), on the introduction and under the history.
+  const shakeToggle = (
+    <View style={[styles.card, styles.toggleRow, { backgroundColor: theme.colors.background }]}>
+      <TaskSymbol color={theme.colors.label} name="iphone.gen3.radiowaves.left.and.right" size={20} />
+      <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>{SHAKE_LABEL()}</Text>
+      <IOSSwitch accessibilityLabel={SHAKE_LABEL()} onValueChange={(on) => void setShakeEnabled(on)} testID="bug.shake" value={shakeEnabled} />
+    </View>
+  );
   // The preview keeps the screen's shape, inside 145 × 260 (`.scaledToFit().frame(maxWidth: 145, maxHeight: 260)`).
   const aspect = window.height / window.width;
   const previewHeight = Math.min(260, 145 * aspect);
@@ -187,7 +218,7 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
             ) : null}
           </View>
           <Text accessibilityRole="header" numberOfLines={1} style={[styles.headline, styles.barTitle, { color: theme.colors.label }]}>
-            {editing && reference === null ? 'Report app issue' : ''}
+            {reference !== null ? '' : editing ? 'Report app issue' : showsHistory ? 'Report Bugs' : ''}
           </Text>
           <View style={[styles.barSide, styles.trailing]}>
             <Pressable accessibilityLabel="Close" accessibilityRole="button" disabled={sending} hitSlop={6} onPress={close} style={{ opacity: sending ? 0.4 : 1 }} testID="bug.close">
@@ -202,7 +233,7 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
             scrolled to (parity pass 4: "What happened?" opened under the bar). */}
         <ScrollView
           contentContainerStyle={styles.scroll}
-          key={reference !== null ? 'success' : editing ? 'form' : 'intro'}
+          key={reference !== null ? 'success' : editing ? 'form' : showsHistory ? 'history' : 'intro'}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
         >
@@ -328,8 +359,16 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
                   </View>
                 ) : null}
               </View>
+            ) : showsHistory ? (
+              /* `history` (:92-105): the status picker, that status's reports, then the shake toggle. */
+              <View style={{ gap: 18 }} testID="bug.history">
+                <SettingsSegments label="Report status" onChange={setHistoryStatus} options={HISTORY_STATUSES} testIDPrefix="bug.history.status" value={historyStatus} />
+                {/* `.id(historyStatus)`: each status starts its list afresh. */}
+                <BugReportHistory key={historyStatus} status={historyStatus} />
+                {shakeToggle}
+              </View>
             ) : (
-              /* `introduction` (:82-101). */
+              /* `introduction` (:114-132). */
               <View style={{ gap: 22 }} testID="bug.intro">
                 <View style={styles.brandRow}>
                   <LinearGradient colors={['#7C7EF6', BUG_ACCENT]} style={styles.brandIcon}>
@@ -347,11 +386,7 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
                 <Text style={[styles.body, styles.centreText, { color: theme.colors.secondaryLabel }]}>
                   If something isn’t working correctly, you can report it to help us improve NexDo for everyone.
                 </Text>
-                <View style={[styles.card, styles.toggleRow, { backgroundColor: theme.colors.background }]}>
-                  <TaskSymbol color={theme.colors.label} name="iphone.gen3.radiowaves.left.and.right" size={20} />
-                  <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>{SHAKE_LABEL()}</Text>
-                  <IOSSwitch accessibilityLabel={SHAKE_LABEL()} onValueChange={(on) => void setShakeEnabled(on)} testID="bug.shake" value={shakeEnabled} />
-                </View>
+                {shakeToggle}
                 <View style={[styles.card, styles.label, { backgroundColor: withAlpha(BUG_ACCENT, 0.09) }]}>
                   <TaskSymbol color={theme.colors.label} name="heart.fill" size={18} />
                   <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>Thank you! Your feedback helps make NexDo better for everyone.</Text>
@@ -385,6 +420,109 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
             <Text style={[styles.headline, { color: theme.colors.label }]}>Sending report...</Text>
           </View>
         </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** `date.formatted(date: .abbreviated, time: .omitted)` on the phone's clock (:253-255). */
+function submittedOn(createdAt: string): string | null {
+  const at = Date.parse(createdAt);
+  if (Number.isNaN(at)) return null;
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
+}
+
+/** `BugReportHistory` (BugReportView.swift:229-303): one status's reports, 50 at a time. */
+function BugReportHistory({ status }: { status: BugReportStatus }) {
+  const theme = useTheme();
+  const [reports, setReports] = useState<SubmittedBugReport[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
+  const alive = useRef(true);
+
+  /** `load(after:)` (:278-302): the first page replaces the list, a cursor appends to it. */
+  const load = async (cursor?: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await bugReportApi.history(status, cursor);
+      if (!alive.current) return;
+      setReports((current) => (cursor === undefined ? page.reports : [...current, ...page.reports]));
+      setNextCursor(page.nextCursor);
+      setLoaded(true);
+    } catch (cause) {
+      if (alive.current) setError(historyFailureMessage(cause));
+    } finally {
+      busy.current = false;
+      if (alive.current) setLoading(false);
+    }
+  };
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  });
+  // `.task { await load() }`, cancelled when the view goes away.
+  useEffect(() => {
+    alive.current = true;
+    void loadRef.current();
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  return (
+    <View style={{ gap: 12 }}>
+      {error !== null ? (
+        <View style={styles.label} testID="bug.history.error">
+          <TaskSymbol color={theme.colors.danger} name="exclamationmark.circle" size={18} />
+          <Text style={[styles.body, styles.grow, { color: theme.colors.danger }]}>{error}</Text>
+        </View>
+      ) : null}
+      {loaded && reports.length === 0 ? (
+        <Text style={[styles.body, { color: theme.colors.secondaryLabel }]}>{status === 'open' ? 'No open bug reports.' : 'No closed bug reports.'}</Text>
+      ) : null}
+      {reports.map((report) => {
+        const title = bugReportStatusTitle(report);
+        const submitted = submittedOn(report.createdAt);
+        return (
+          <View
+            accessible
+            accessibilityLabel={[report.description, title, submitted ? `Submitted ${submitted}` : null, report.reference].filter(Boolean).join(', ')}
+            key={report.id}
+            style={[styles.card, { gap: 8, backgroundColor: theme.colors.background }]}
+            testID={`bug.history.report-${report.id}`}
+          >
+            <Text style={[styles.body, { color: theme.colors.label }]}>{report.description}</Text>
+            <View style={styles.label}>
+              <TaskSymbol color={theme.colors.label} name={report.status === 'open' ? 'circle' : 'checkmark.circle'} size={16} />
+              <Text style={[styles.subheadlineSemibold, { color: theme.colors.label }]}>{title}</Text>
+            </View>
+            {submitted ? <Text style={[styles.footnote, { color: theme.colors.secondaryLabel }]}>{`Submitted ${submitted}`}</Text> : null}
+            <Text style={[styles.footnoteMono, { color: theme.colors.secondaryLabel }]}>{report.reference}</Text>
+          </View>
+        );
+      })}
+      {loading ? (
+        <View style={styles.label}>
+          <ActivityIndicator color={theme.colors.secondaryLabel} />
+          <Text style={[styles.body, { color: theme.colors.secondaryLabel }]}>Loading reports…</Text>
+        </View>
+      ) : null}
+      {loaded || error !== null ? (
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading }} disabled={loading} onPress={() => void load()} style={[styles.label, styles.historyButton, loading && styles.dim]} testID="bug.history.refresh">
+          <TaskSymbol color={BUG_ACCENT} name="arrow.clockwise" size={18} />
+          <Text style={[styles.body, { color: BUG_ACCENT }]}>{error !== null && !loaded ? 'Retry' : 'Refresh reports'}</Text>
+        </Pressable>
+      ) : null}
+      {nextCursor !== null ? (
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading }} disabled={loading} onPress={() => void load(nextCursor)} style={[styles.historyButton, loading && styles.dim]} testID="bug.history.more">
+          <Text style={[styles.body, { color: BUG_ACCENT }]}>Load more reports</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -442,5 +580,8 @@ const styles = StyleSheet.create({
   footnote: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 12, lineHeight: 16 },
   subheadlineBold: { fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  subheadlineSemibold: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  footnoteMono: { fontSize: 13, lineHeight: 18, fontFamily: isAndroid() ? 'monospace' : 'Menlo' },
+  historyButton: { minHeight: 44, justifyContent: 'center' },
   mono: { fontSize: 16, lineHeight: 21, fontFamily: isAndroid() ? 'monospace' : 'Menlo' },
 });

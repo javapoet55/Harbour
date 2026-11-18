@@ -2,6 +2,14 @@ export type VoiceRecord = { id:string; user:string; date:string; minutes:number|
 export function formatVoiceDate(value:string) {
  return new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',timeZoneName:'short'}).format(new Date(value));
 }
+const recentDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles', timeZoneName: 'short',
+  month: 'short', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit',
+});
+export function formatRecentDate(value: string) {
+  return recentDateFormatter.format(new Date(value));
+}
+
 export function voiceSummary(records:VoiceRecord[]) {
  const measured=records.filter(r=>r.minutes!==null);
  const minutes=measured.reduce((sum,r)=>sum+r.minutes!,0);

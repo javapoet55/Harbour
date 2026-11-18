@@ -163,9 +163,26 @@ export function FormToggle({ label, value, onValueChange, disabled = false, test
   );
 }
 
-export function FormButton({ title, onPress, destructive = false, disabled = false, testID, icon }: { title: string; onPress: () => void; destructive?: boolean; disabled?: boolean; testID?: string; icon?: keyof typeof Ionicons.glyphMap }) {
+export function FormButton({
+  title,
+  onPress,
+  destructive = false,
+  disabled = false,
+  testID,
+  icon,
+  tint,
+}: {
+  title: string;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+  testID?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  /** The screen's `.tint(...)`, when it is not `link` (Change password inherits My Page's, Phase 14). */
+  tint?: string;
+}) {
   const theme = useTheme();
-  const color = destructive ? theme.colors.danger : theme.colors.link;
+  const color = destructive ? theme.colors.danger : (tint ?? theme.colors.link);
   // A disabled `Button` in a `Form` keeps its glyph in the tint and draws the title in `.tertiaryLabel`
   // — measured (187, 187, 188) light and (88, 88, 89) dark on `moments-settings` — rather than dimming
   // the whole row (SHARED-REQUESTS "FormButton").

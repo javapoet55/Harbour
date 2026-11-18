@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import type { NutritionDay, NutritionEntry, NutritionInsight, NutritionSettings, NutritionSummary } from '../../../api/nutrition';
 import type { Profile } from '../../../api';
+import { useAppearance } from '../../../store/appearance';
 import { useSession } from '../../../store/session';
 
 const mockApi = {
@@ -442,7 +443,16 @@ describe('live', () => {
     await waitFor(() => expect(screen.getByText('Added to Groceries')).toBeTruthy());
     expect(mockApi.actOnInsight).toHaveBeenCalledWith({ date: '2026-10-05', key: 'k1', action: 'add' });
 
+    // Android ahead of iOS: Pause asks first. Cancel saves nothing; only Pause turns the calls off.
     await press('calorie-pause');
+    expect(lastAlert()[0]).toBe('Pause daily calls?');
+    const buttons = lastAlert()[2] as { text: string; style?: string; onPress?: () => void }[];
+    expect(buttons.map((button) => [button.text, button.style])).toEqual([
+      ['Cancel', 'cancel'],
+      ['Pause', 'destructive'],
+    ]);
+    expect(mockApi.saveSettings).not.toHaveBeenCalled();
+    await act(async () => buttons[1].onPress?.());
     await waitFor(() => expect(lastAlert()[1]).toBe('Daily calls are paused. Turn them back on from Manage daily check-in.'));
     expect(mockApi.saveSettings).toHaveBeenCalledWith({ enabled: false });
   });
@@ -543,5 +553,40 @@ describe('live', () => {
     await waitFor(() => expect(mockApi.day).toHaveBeenCalledWith('2026-10-04'));
     // Not today: no insight card is asked for.
     expect(mockApi.insight).not.toHaveBeenCalledWith('2026-10-04');
+  });
+});
+
+describe('dark mode (ce6d20a)', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system' }));
+  const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+
+  it('Night: a black page, dark cards, lilac step numbers and readable art on the intro and Confirm', async () => {
+    useAppearance.setState({ appearance: 'night' });
+    await open(false);
+    expect(flat('calorie-page-intro').backgroundColor).toBe('#000000');
+    // Swift's dark intro art; the pack art is a picture on white.
+    expect(screen.getByTestId('calorie-art-dark')).toBeTruthy();
+    expect(screen.queryByTestId('calorie-art')).toBeNull();
+    await press('calorie-set-up');
+    await press('calorie-time-next');
+    await press('calorie-goals-next');
+    expect(title()).toBe('Review & Confirm');
+    // Android ahead of iOS: Confirm also draws the dark art, not a white box (§24 bug 6).
+    expect(screen.getByTestId('calorie-art-dark')).toBeTruthy();
+    expect(screen.queryByTestId('calorie-art')).toBeNull();
+    expect(flat('calorie-summary').backgroundColor).toBe('#1C1C1E');
+    const steps = within(screen.getByTestId('calorie-steps'));
+    expect(StyleSheet.flatten(steps.getByText('1').props.style).color).toBe('#BAABFF');
+    expect(StyleSheet.flatten(steps.getByText('3').props.style).color).toBe('#FFFFFF');
+    expect(StyleSheet.flatten(screen.getByText('Daily Food Check-in').props.style).color).toBe('#FFFFFF');
+  });
+
+  it('Day: the pack art, a white page and the nexdoInk ink', async () => {
+    useAppearance.setState({ appearance: 'day' });
+    await open(false);
+    expect(flat('calorie-page-intro').backgroundColor).toBe('#FFFFFF');
+    expect(screen.getByTestId('calorie-art')).toBeTruthy();
+    expect(screen.queryByTestId('calorie-art-dark')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByText('Daily Food Check-in').props.style).color).toBe('#080F2E');
   });
 });

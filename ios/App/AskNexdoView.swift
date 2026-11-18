@@ -235,10 +235,7 @@ struct AskNexdoView: View {
                                 model.lastAssistantPrompt = nil
                             },
                             ask: { request($0) }, voice: { openVoice() },
-                            read: { index, text in
-                                if readingSection == index { stopSpeech() }
-                                else { speakAnswer(text: text, section: index) }
-                            }, readingSection: readingSection, readError: voiceError ?? playback.error)
+                            stopVoiceReply: stopSpeech, voiceReplyError: voiceError ?? playback.error)
                     } else {
                         if let query = model.lastAssistantPrompt {
                             Label {

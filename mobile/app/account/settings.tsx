@@ -69,6 +69,7 @@ import { useConsent } from '../../src/store/consent';
 import { brand, ElevatedSurface, useTheme } from '../../src/theme';
 import { androidLabel } from '../../src/theme/androidForm';
 import { toggleWorkingDay, WORKING_DAY_LABELS, WORKING_DAYS_FOOTNOTE, workingDayLocked, workingDaySet } from '../../src/features/tasks/workingDays';
+import { useSettingsTimeZoneSync } from '../../src/features/account/useSettingsTimeZoneSync';
 
 /**
  * `ProfileSettingsView` (ios/App/ProfileView.swift:126), **body `:146-270`**, read top to bottom.
@@ -163,6 +164,9 @@ function SettingsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  // Phase 14: sync the device zone on open without letting a failure stop Settings loading (ANDROID AHEAD,
+  // §24 bug 12), and again when the zone changes while Settings is open.
+  useSettingsTimeZoneSync(profile?.id ?? null, setFailure);
 
   const saving =
     update.isPending || uploadPhoto.isPending || syncNow.isPending || setWrites.isPending || disconnect.isPending || deleteAccount.isPending;
@@ -347,7 +351,7 @@ function SettingsScreen({
           testID="settings-back"
         >
           {/* `Image(systemName: "chevron.backward")` with no `.font` is `.body` (ProfileView.swift:251). */}
-          <TaskSymbol color={theme.colors.link} name="chevron.backward" size={17} />
+          <TaskSymbol color={theme.colors.actionForeground} name="chevron.backward" size={17} />
         </Pressable>
       </View>
 
@@ -410,8 +414,8 @@ function SettingsScreen({
                 style={styles.photoButton}
                 testID="settings-change-photo"
               >
-                <TaskSymbol color={theme.colors.link} name="photo" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Change photo</Text>
+                <TaskSymbol color={theme.colors.actionForeground} name="photo" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Change photo</Text>
               </Pressable>
               {profile?.photo ? (
                 <Pressable
@@ -430,12 +434,12 @@ function SettingsScreen({
           {savingPhoto ? (
             // `ProgressView("Saving profile photo…")` puts its label under the spinner.
             <View style={styles.centred}>
-              <ActivityIndicator color={theme.colors.link} size="small" />
+              <ActivityIndicator color={theme.colors.actionForeground} size="small" />
               <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving profile photo…</Text>
             </View>
           ) : null}
           {photoMessage !== null ? (
-            <Text style={[styles.caption, { color: theme.colors.link }]} testID="settings-photo-message">
+            <Text style={[styles.caption, { color: theme.colors.actionForeground }]} testID="settings-photo-message">
               {photoMessage}
             </Text>
           ) : null}
@@ -444,7 +448,7 @@ function SettingsScreen({
         {/* 4. `if loading … else if preferences != nil … else` (`:191`, `:245`). */}
         {loading ? (
           <View style={styles.centred}>
-            <ActivityIndicator color={theme.colors.link} size="small" />
+            <ActivityIndicator color={theme.colors.actionForeground} size="small" />
             <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="settings-loading">
               Loading settings…
             </Text>
@@ -481,6 +485,8 @@ function SettingsScreen({
             {/* 6. Voice and confirmation (`:200-208`). */}
             <SettingsCard testID="settings-voice" title="Voice and confirmation">
               <SettingsPicker
+                // `.tint(.nexdoActionForeground)` on Settings (ProfileView.swift:293, :568).
+                tint={theme.colors.actionForeground}
                 label="AI confirmation"
                 onChange={(value) => patch({ confirmationLevel: value })}
                 options={CONFIRMATION_LEVELS}
@@ -514,6 +520,8 @@ function SettingsScreen({
                 value={next.enabled}
               />
               <SettingsPicker
+                // `.tint(.nexdoActionForeground)` on Settings (ProfileView.swift:293, :568).
+                tint={theme.colors.actionForeground}
                 label="Protect my current focus"
                 onChange={(value) => setNext((current) => ({ ...current, switchingThreshold: value }))}
                 options={SWITCHING_THRESHOLDS}
@@ -556,7 +564,7 @@ function SettingsScreen({
                 onPress={() => openWeb('/notifications')}
                 testID="settings-notification-center"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Open Notification Center</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Open Notification Center</Text>
               </Pressable>
             </SettingsCard>
 
@@ -589,7 +597,7 @@ function SettingsScreen({
                     onPress={() => void connections.refetch()}
                     testID="settings-retry-connections"
                   >
-                    <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry connection status</Text>
+                    <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Retry connection status</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -603,8 +611,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-connect-calendar"
               >
-                <TaskSymbol color={theme.colors.link} name="calendar.badge.plus" size={17} />
-                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.link }]}>Connect Calendar</Text>
+                <TaskSymbol color={theme.colors.actionForeground} name="calendar.badge.plus" size={17} />
+                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.actionForeground }]}>Connect Calendar</Text>
                 <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={13} />
               </Pressable>
               <Pressable
@@ -616,8 +624,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-sync-now"
               >
-                <TaskSymbol color={theme.colors.link} name="arrow.triangle.2.circlepath" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Synchronize now</Text>
+                <TaskSymbol color={theme.colors.actionForeground} name="arrow.triangle.2.circlepath" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Synchronize now</Text>
               </Pressable>
               <SettingsDivider />
               {/* `.font(.caption)` with no `.foregroundStyle` (ProfileView.swift:235). */}
@@ -631,7 +639,7 @@ function SettingsScreen({
                   onPress={() => consent.withdraw()}
                   testID="settings-withdraw-consent"
                 >
-                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>Withdraw AI permission</Text>
+                  <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Withdraw AI permission</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -641,8 +649,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-privacy-policy"
               >
-                <TaskSymbol color={theme.colors.link} name="hand.raised" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.privacyPolicyTitle}</Text>
+                <TaskSymbol color={theme.colors.actionForeground} name="hand.raised" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>{LEGAL_LINKS.privacyPolicyTitle}</Text>
               </Pressable>
               <Pressable
                 accessibilityLabel={LEGAL_LINKS.termsOfServiceTitle}
@@ -651,8 +659,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-terms-of-service"
               >
-                <TaskSymbol color={theme.colors.link} name="doc.text" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.termsOfServiceTitle}</Text>
+                <TaskSymbol color={theme.colors.actionForeground} name="doc.text" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>{LEGAL_LINKS.termsOfServiceTitle}</Text>
               </Pressable>
               <Pressable
                 accessibilityLabel="Delete account"
@@ -696,7 +704,7 @@ function SettingsScreen({
             onPress={onRetry}
             testID="settings-retry"
           >
-            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry loading settings</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]}>Retry loading settings</Text>
           </Pressable>
         )}
 
@@ -708,8 +716,8 @@ function SettingsScreen({
         ) : null}
         {message !== null ? (
           <View style={styles.row}>
-            <TaskSymbol color={theme.colors.link} name="checkmark.circle" size={17} />
-            <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-message">
+            <TaskSymbol color={theme.colors.actionForeground} name="checkmark.circle" size={17} />
+            <Text style={[theme.typography.body, { color: theme.colors.actionForeground }]} testID="settings-message">
               {message}
             </Text>
           </View>
@@ -734,8 +742,8 @@ function SettingsScreen({
 
 /**
  * `WorkingDaysField` (ProfileView.swift, d568989): "Working days" over one toggle per weekday, Sunday
- * first, and the caption. The last day left on cannot be turned off. An unset value reads as Monday to
- * Friday (`preferences?.workingDays ?? "1,2,3,4,5"`, `:320`).
+ * first, and the caption. The last day left on cannot be turned off. An unset value reads as every day
+ * (`preferences?.workingDays ?? "0,1,2,3,4,5,6"`, `:550`), the server's default since Phase 14.
  */
 function WorkingDaysField({ value, onChange }: { value: string | undefined; onChange: (next: string) => void }) {
   const theme = useTheme();
@@ -785,8 +793,8 @@ function PhoneCalendarCard({ count, onManage }: { count: number; onManage: () =>
       </View>
       <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
       <Pressable accessibilityRole="button" onPress={onManage} style={styles.linkRow} testID="settings-manage-phone-calendars">
-        <TaskSymbol color={theme.colors.link} name="slider.horizontal.3" size={15} />
-        <Text style={[styles.subheadline, styles.grow, { color: theme.colors.link }]}>{copy.manageCalendars}</Text>
+        <TaskSymbol color={theme.colors.actionForeground} name="slider.horizontal.3" size={15} />
+        <Text style={[styles.subheadline, styles.grow, { color: theme.colors.actionForeground }]}>{copy.manageCalendars}</Text>
         <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={13} />
       </Pressable>
       <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{copy.settingsFootnote}</Text>
@@ -862,7 +870,7 @@ function ConnectionList({
                     onPress={() => onReconnect(connection)}
                     testID={`settings-reconnect-${connection.id}`}
                   >
-                    <Text style={[styles.caption, styles.bold, { color: theme.colors.link }]}>Reconnect</Text>
+                    <Text style={[styles.caption, styles.bold, { color: theme.colors.actionForeground }]}>Reconnect</Text>
                   </Pressable>
                 ) : null}
                 <Pressable

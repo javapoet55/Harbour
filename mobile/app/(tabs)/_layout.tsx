@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabBarButton, TaskSymbol } from '../../src/components';
 import { WellnessTabButton } from '../../src/components/WellnessTabButton';
 import { usePomodoroNotificationRoute } from '../../src/features/pomodoro/usePomodoroNotificationRoute';
+import { useReviewPrompt } from '../../src/features/review/useReviewPrompt';
 import { useSession } from '../../src/store/session';
 import { useTheme } from '../../src/theme';
 
@@ -20,6 +21,8 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   // `.onAppear` / `.onChange(of: pomodoroRoute.owner)` → `openPomodoroNotification()` (RootView.swift:210-211).
   usePomodoroNotificationRoute(useSession((state) => state.profile?.id));
+  // `.modifier(AppReviewPromptModifier(...))` on the signed-in tabs (RootView.swift:139-142, bfa5b73).
+  useReviewPrompt();
   return (
     <Tabs
       screenOptions={{

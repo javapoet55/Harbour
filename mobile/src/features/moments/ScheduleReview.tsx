@@ -9,7 +9,7 @@ import { useStore } from 'zustand';
 import type { WishDeliveryPlan } from '../../api/moments';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { FixedScheme, textStyles } from '../../theme';
+import { textStyles, useTheme } from '../../theme';
 import { MomentConfetti, systemColors } from './components';
 import { momentLabel } from './dates';
 import { canSendMessage, openMessages } from './device';
@@ -22,22 +22,46 @@ import { momentsStore } from './store';
  * `FestivalScheduleReview`, `ScheduleRecipientEditor` and `FestivalScheduleSuccess`
  * (ios/App/ManageFestivalView.swift:348-634), Phase 12.
  *
- * Swift draws all three in `ScheduleDesign`'s FIXED light colours (`:389-393`), whatever the phone's
- * mode, so they sit in a `FixedScheme scheme="light"` here: the shared date pill and fields inside
- * resolve the light palette too.
+ * Since ce6d20a Swift's `ScheduleDesign` (`:389-393`) follows the phone's theme — `nexdoInk`,
+ * `nexdoSecondary`, `systemGroupedBackground`, cards on `secondarySystemGroupedBackground` and sheets on
+ * `systemBackground` — so these screens do too (`useScheduleDesign`); they used to be fixed light.
  *
  * Send Now sends approved email at once from the connected account and opens Messages for each phone
  * recipient, where the person still taps Send — Nexdo never sends a Messages wish by itself.
  */
 
-/** `ScheduleDesign` (:389-393). */
-export const SCHEDULE_INK = '#0F1729'; // Color(red: 0.06, green: 0.09, blue: 0.16)
-export const SCHEDULE_SECONDARY = '#63738C'; // Color(red: 0.39, green: 0.45, blue: 0.55)
-export const SCHEDULE_BACKGROUND = '#F7FAFF'; // Color(red: 0.97, green: 0.98, blue: 1)
+/** `ScheduleDesign` (:389-393) in the current scheme, and the system colours its cards and sheets use. */
+export function useScheduleDesign() {
+  const { scheme, colors } = useTheme();
+  const dark = scheme === 'dark';
+  return {
+    ink: colors.ink,
+    secondary: colors.secondary,
+    /** `secondary` faded: the sheet's close glyph (60%). */
+    secondaryFaint: dark ? 'rgba(235, 235, 245, 0.36)' : 'rgba(87, 92, 128, 0.6)',
+    /** `secondary` at 70%: the field placeholders. */
+    placeholder: dark ? 'rgba(235, 235, 245, 0.42)' : 'rgba(87, 92, 128, 0.7)',
+    /** `systemGroupedBackground`. */
+    background: dark ? '#000000' : '#F2F2F7',
+    /** `secondarySystemGroupedBackground`: the review rows. */
+    card: dark ? '#1C1C1E' : '#FFFFFF',
+    /** `presentationBackground(systemBackground)`, a level up in a dark sheet. */
+    sheet: dark ? '#1C1C1E' : '#FFFFFF',
+    /** A field on the sheet: one step above it in dark. */
+    field: dark ? '#2C2C2E' : '#FFFFFF',
+    separator: colors.separator,
+  };
+}
 const BLUE = systemColors.blue;
+
+/** A recipient field's ink, hairline and fill. */
+function fieldColors(design: ReturnType<typeof useScheduleDesign>) {
+  return { color: design.ink, borderColor: design.separator, backgroundColor: design.field };
+}
 
 /** `ScheduleWishCard` (:398-414): the occasion's emoji beside the wish. */
 export function ScheduleWishCard({ heading, message, occasion }: { heading: string; message: string; occasion: string }) {
+  const design = useScheduleDesign();
   const emoji = occasion === 'birthday' ? '🎂' : occasion === 'anniversary' ? '💐' : occasion === 'getWellSoon' ? '🌷' : '🎉';
   return (
     <View style={[styles.wishCard, { borderColor: withAlpha(systemColors.purple, 0.08) }]} testID="schedule-wish-card">
@@ -46,10 +70,10 @@ export function ScheduleWishCard({ heading, message, occasion }: { heading: stri
         <Text style={styles.emojiText}>{emoji}</Text>
       </View>
       <View style={styles.grow}>
-        <Text style={[styles.headline, { color: SCHEDULE_INK }]} testID="schedule-wish-heading">
+        <Text style={[styles.headline, { color: design.ink }]} testID="schedule-wish-heading">
           {heading}
         </Text>
-        <Text style={[textStyles.subheadline, { color: SCHEDULE_SECONDARY }]}>{message}</Text>
+        <Text style={[textStyles.subheadline, { color: design.secondary }]}>{message}</Text>
       </View>
     </View>
   );
@@ -106,7 +130,7 @@ function LightSheet({
   onClose,
   trailing,
   footer,
-  background = SCHEDULE_BACKGROUND,
+  background,
   children,
   testID,
   onClosed,
@@ -122,6 +146,7 @@ function LightSheet({
   children: ReactNode;
   testID: string;
 }) {
+  const design = useScheduleDesign();
   const insets = useSafeAreaInsets();
   const android = Platform.OS === 'android';
   const shown = useRef(visible);
@@ -131,17 +156,17 @@ function LightSheet({
   }, [android, visible, onClosed]);
   return (
     <Modal animationType="slide" onDismiss={android ? undefined : onClosed} onRequestClose={onClose} presentationStyle={android ? undefined : 'pageSheet'} statusBarTranslucent transparent={android} visible={visible}>
-      <FixedScheme scheme="light">
+      <>
         {android ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim]} /> : null}
-        <View style={[styles.sheet, { backgroundColor: background, marginTop: android ? insets.top + 8 : 0 }, android && styles.sheetShape]} testID={testID}>
+        <View style={[styles.sheet, { backgroundColor: background ?? design.background, marginTop: android ? insets.top + 8 : 0 }, android && styles.sheetShape]} testID={testID}>
           <View style={styles.sheetBar}>
             <View style={styles.sheetSide} />
-            <Text style={[styles.sheetTitle, { color: SCHEDULE_INK }]}>{title}</Text>
+            <Text style={[styles.sheetTitle, { color: design.ink }]}>{title}</Text>
             <View style={[styles.sheetSide, styles.trailing]}>
               {trailing ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={trailing.close ? 'Close editor' : trailing.title} disabled={trailing.disabled} hitSlop={8} onPress={trailing.onPress} testID={trailing.testID}>
                   {trailing.close ? (
-                    <Ionicons name="close-circle" size={26} color={withAlpha(SCHEDULE_SECONDARY, 0.6)} />
+                    <Ionicons name="close-circle" size={26} color={design.secondaryFaint} />
                   ) : (
                     <Text style={[textStyles.body, { color: trailing.disabled ? withAlpha(BLUE, 0.4) : BLUE }]}>{trailing.title}</Text>
                   )}
@@ -154,7 +179,7 @@ function LightSheet({
           </ScrollView>
           {footer ? <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>{footer}</View> : null}
         </View>
-      </FixedScheme>
+      </>
     </Modal>
   );
 }
@@ -169,15 +194,16 @@ function deliveryLine(model: ManageModel, recipient: ManagedRecipient): string {
 
 /** `reviewRow(…)` (:571-581). */
 function ReviewRow({ icon, color, label, value, detail, onEdit, disabled, testID }: { icon: keyof typeof Ionicons.glyphMap; color: string; label: string; value: string; detail: string; onEdit: () => void; disabled: boolean; testID: string }) {
+  const design = useScheduleDesign();
   return (
-    <View style={styles.reviewRow}>
+    <View style={[styles.reviewRow, { backgroundColor: design.card }]}>
       <View style={[styles.reviewIcon, { backgroundColor: withAlpha(color, 0.08) }]}>
         <Ionicons name={icon} size={24} color={color} />
       </View>
       <View style={styles.grow}>
-        <Text style={[styles.caption, { color: SCHEDULE_SECONDARY }]}>{label}</Text>
-        <Text style={[textStyles.subheadline, styles.bold, { color: SCHEDULE_INK }]}>{value}</Text>
-        <Text style={[styles.caption, { color: SCHEDULE_SECONDARY }]}>{detail}</Text>
+        <Text style={[styles.caption, { color: design.secondary }]}>{label}</Text>
+        <Text style={[textStyles.subheadline, styles.bold, { color: design.ink }]}>{value}</Text>
+        <Text style={[styles.caption, { color: design.secondary }]}>{detail}</Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onEdit} style={[styles.edit, { backgroundColor: withAlpha(BLUE, 0.07) }, disabled && styles.pressed]} testID={testID}>
         <Text style={[textStyles.subheadline, styles.bold, { color: BLUE }]}>Edit</Text>
@@ -205,6 +231,7 @@ export function sendNowNotice(plans: WishDeliveryPlan[]): string {
  * Schedule — or Send Now, which asks once more ("Send now") and then sends.
  */
 export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { model: ManageModel; visible: boolean; onClose: () => void; onClosed?: () => void }) {
+  const design = useScheduleDesign();
   const state = useStore(model);
   // `@State` copies taken when the sheet opens; the parent re-keys the sheet on each opening.
   const [date, setDate] = useState(state.sendDate);
@@ -330,8 +357,8 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
         testID="schedule-review"
       >
         <View style={styles.reviewBody} pointerEvents={submitting ? 'none' : 'auto'}>
-          <Text style={[textStyles.largeTitle, styles.bold, { color: SCHEDULE_INK }]}>Review schedule</Text>
-          <Text style={[textStyles.body, { color: SCHEDULE_SECONDARY }]}>Let’s make sure everything looks good.</Text>
+          <Text style={[textStyles.largeTitle, styles.bold, { color: design.ink }]}>Review schedule</Text>
+          <Text style={[textStyles.body, { color: design.secondary }]}>Let’s make sure everything looks good.</Text>
           {first ? <ScheduleWishCard heading={reviewHeading(state, first)} message={deliveryMessage(state, first)} occasion={type} /> : null}
           <ReviewRow
             icon="calendar-outline"
@@ -367,7 +394,7 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
           {recipients.some((recipient) => recipientChannel(state, recipient) === 'messages') ? (
             <View style={[styles.info, { backgroundColor: withAlpha(systemColors.purple, 0.05) }]}>
               <Ionicons name="notifications-outline" size={24} color={systemColors.purple} />
-              <Text style={[styles.footnote, styles.grow, { color: SCHEDULE_SECONDARY }]}>
+              <Text style={[styles.footnote, styles.grow, { color: design.secondary }]}>
                 At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.
               </Text>
             </View>
@@ -378,7 +405,7 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
             </Text>
           ) : null}
           {immediateNotice ? (
-            <Text style={[textStyles.body, { color: SCHEDULE_SECONDARY }]} testID="review-send-now-notice">
+            <Text style={[textStyles.body, { color: design.secondary }]} testID="review-send-now-notice">
               {immediateNotice}
             </Text>
           ) : null}
@@ -404,7 +431,7 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
       </LightSheet>
 
       {/* `editingDate` (:489-494): the date and time, no earlier than now. */}
-      <LightSheet visible={editingDate} title="Edit date & time" onClose={() => setEditingDate(false)} background="#FFFFFF" trailing={{ close: true, onPress: () => setEditingDate(false), testID: 'review-date-close' }} testID="review-date-sheet">
+      <LightSheet visible={editingDate} title="Edit date & time" onClose={() => setEditingDate(false)} background={design.sheet} trailing={{ close: true, onPress: () => setEditingDate(false), testID: 'review-date-close' }} testID="review-date-sheet">
         <View style={styles.editor}>
           <DateField includeTime label="Date and time" value={dateDraft} onChange={setDateDraft} zone={state.zone} minimum={openedAt} testID="review-date" />
           <ActionButton
@@ -436,7 +463,7 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
         visible={sendNowConfirmation}
         title="Send now"
         onClose={() => setSendNowConfirmation(false)}
-        background="#FFFFFF"
+        background={design.sheet}
         trailing={{ title: 'Cancel', onPress: () => setSendNowConfirmation(false), testID: 'send-now-cancel' }}
         // Android ahead of iOS: Swift starts `sendNow()` while this sheet is still dismissing (:501-536), so
         // the Messages composer can collide with it. The send starts once the sheet has closed.
@@ -458,23 +485,23 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
         testID="send-now-sheet"
       >
         <View style={styles.reviewBody}>
-          <Text style={[textStyles.body, { color: SCHEDULE_SECONDARY }]}>Email is sent now where an address is saved. Messages opens for you to tap Send. Missing channels are skipped.</Text>
+          <Text style={[textStyles.body, { color: design.secondary }]}>Email is sent now where an address is saved. Messages opens for you to tap Send. Missing channels are skipped.</Text>
           {recipients.map((recipient) => (
             <View key={recipient.key} style={[styles.sendNowCard, { backgroundColor: withAlpha(BLUE, 0.04) }]} testID={`send-now-${recipient.key}`}>
-              <Text style={[styles.headline, { color: SCHEDULE_INK }]}>{recipient.name}</Text>
+              <Text style={[styles.headline, { color: design.ink }]}>{recipient.name}</Text>
               {recipient.email !== '' ? (
                 <View style={styles.inline}>
-                  <Ionicons name="mail-outline" size={17} color={SCHEDULE_INK} />
-                  <Text style={[textStyles.body, { color: SCHEDULE_INK }]}>{recipient.email}</Text>
+                  <Ionicons name="mail-outline" size={17} color={design.ink} />
+                  <Text style={[textStyles.body, { color: design.ink }]}>{recipient.email}</Text>
                 </View>
               ) : null}
               {recipient.phone !== '' ? (
                 <View style={styles.inline}>
-                  <Ionicons name="call-outline" size={17} color={SCHEDULE_INK} />
-                  <Text style={[textStyles.body, { color: SCHEDULE_INK }]}>{recipient.phone}</Text>
+                  <Ionicons name="call-outline" size={17} color={design.ink} />
+                  <Text style={[textStyles.body, { color: design.ink }]}>{recipient.phone}</Text>
                 </View>
               ) : null}
-              <Text style={[textStyles.subheadline, { color: SCHEDULE_SECONDARY }]}>{deliveryMessage(state, recipient)}</Text>
+              <Text style={[textStyles.subheadline, { color: design.secondary }]}>{deliveryMessage(state, recipient)}</Text>
             </View>
           ))}
         </View>
@@ -485,20 +512,21 @@ export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { mod
 
 /** `ScheduleRecipientEditor` (:611-634): the recipient's name, phone and email for this schedule. */
 function ScheduleRecipientEditor({ recipient, delivery, onDone, onCancel }: { recipient: ManagedRecipient; delivery: string; onDone: (updated: ManagedRecipient) => void; onCancel: () => void }) {
+  const design = useScheduleDesign();
   const [draft, setDraft] = useState(recipient);
   const icon: keyof typeof Ionicons.glyphMap = delivery.startsWith('Messages') ? 'chatbubble' : delivery.startsWith('Email') ? 'mail' : 'share-outline';
   return (
-    <LightSheet visible title="Edit recipient" onClose={onCancel} background="#FFFFFF" trailing={{ close: true, onPress: onCancel, testID: 'review-recipient-close' }} testID="review-recipient-sheet">
+    <LightSheet visible title="Edit recipient" onClose={onCancel} background={design.sheet} trailing={{ close: true, onPress: onCancel, testID: 'review-recipient-close' }} testID="review-recipient-sheet">
       <View style={styles.editor}>
         <View style={styles.inline}>
           <Ionicons name="person-outline" size={30} color={BLUE} />
-          <TextInput accessibilityLabel="Recipient name" onChangeText={(name) => setDraft({ ...draft, name })} placeholder="Recipient name" placeholderTextColor={withAlpha(SCHEDULE_SECONDARY, 0.7)} style={[styles.field, styles.grow]} testID="review-recipient-name" value={draft.name} />
+          <TextInput accessibilityLabel="Recipient name" onChangeText={(name) => setDraft({ ...draft, name })} placeholder="Recipient name" placeholderTextColor={design.placeholder} style={[styles.field, fieldColors(design), styles.grow]} testID="review-recipient-name" value={draft.name} />
         </View>
-        <TextInput accessibilityLabel="Phone number" keyboardType="phone-pad" onChangeText={(phone) => setDraft({ ...draft, phone })} placeholder="Phone number" placeholderTextColor={withAlpha(SCHEDULE_SECONDARY, 0.7)} style={styles.field} testID="review-recipient-phone" value={draft.phone} />
-        <TextInput accessibilityLabel="Email address" autoCapitalize="none" keyboardType="email-address" onChangeText={(email) => setDraft({ ...draft, email })} placeholder="Email address" placeholderTextColor={withAlpha(SCHEDULE_SECONDARY, 0.7)} style={styles.field} testID="review-recipient-email" value={draft.email} />
+        <TextInput accessibilityLabel="Phone number" keyboardType="phone-pad" onChangeText={(phone) => setDraft({ ...draft, phone })} placeholder="Phone number" placeholderTextColor={design.placeholder} style={[styles.field, fieldColors(design)]} testID="review-recipient-phone" value={draft.phone} />
+        <TextInput accessibilityLabel="Email address" autoCapitalize="none" keyboardType="email-address" onChangeText={(email) => setDraft({ ...draft, email })} placeholder="Email address" placeholderTextColor={design.placeholder} style={[styles.field, fieldColors(design)]} testID="review-recipient-email" value={draft.email} />
         <View style={styles.inline}>
-          <Ionicons name={icon} size={17} color={SCHEDULE_SECONDARY} />
-          <Text style={[textStyles.body, { color: SCHEDULE_SECONDARY }]}>{delivery}</Text>
+          <Ionicons name={icon} size={17} color={design.secondary} />
+          <Text style={[textStyles.body, { color: design.secondary }]}>{delivery}</Text>
         </View>
         <ActionButton title="Done" onPress={() => onDone(draft)} disabled={draft.name.trim() === ''} testID="review-recipient-done" />
         <ActionButton title="Cancel" kind="secondary" onPress={onCancel} testID="review-recipient-cancel" />
@@ -523,6 +551,7 @@ export function ScheduleSuccess({
   wish: { heading: string; message: string } | null;
   done: () => void;
 }) {
+  const design = useScheduleDesign();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const summaries = [
     ...new Set(
@@ -539,8 +568,8 @@ export function ScheduleSuccess({
   // are in time order.
   const times = [...new Set([...plans].sort((a, b) => planDate(a) - planDate(b)).map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))];
   return (
-    <FixedScheme scheme="light">
-      <View style={[styles.fill, { backgroundColor: SCHEDULE_BACKGROUND }]} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">
+    <>
+      <View style={[styles.fill, { backgroundColor: design.background }]} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">
         {/* The bar sits on the page's own colour, as Swift's inline bar over `ScheduleDesign.background`;
             the stack's default showed the Moments backdrop above it as a grey band. */}
         <Stack.Screen
@@ -550,7 +579,7 @@ export function ScheduleSuccess({
             headerLeft: () => null,
             headerRight: undefined,
             gestureEnabled: false,
-            headerStyle: { backgroundColor: SCHEDULE_BACKGROUND },
+            headerStyle: { backgroundColor: design.background },
             headerShadowVisible: false,
           }}
         />
@@ -558,26 +587,26 @@ export function ScheduleSuccess({
           <View style={[styles.check, { backgroundColor: withAlpha(systemColors.green, 0.08) }]}>
             <Ionicons name="checkmark-circle" size={92} color={systemColors.green} />
           </View>
-          <Text style={[styles.title1, styles.bold, { color: SCHEDULE_INK }]}>Schedule confirmed!</Text>
+          <Text style={[styles.title1, styles.bold, { color: design.ink }]}>Schedule confirmed!</Text>
           <View style={styles.summary}>
             {summaries.map((summary) => (
-              <Text key={summary} style={[textStyles.body, styles.center, { color: SCHEDULE_SECONDARY }]}>
+              <Text key={summary} style={[textStyles.body, styles.center, { color: design.secondary }]}>
                 {summary}
               </Text>
             ))}
             {times.map((time) => (
-              <Text key={time} style={[textStyles.body, styles.bold, styles.center, { color: SCHEDULE_INK }]} testID="schedule-confirmed-date">
+              <Text key={time} style={[textStyles.body, styles.bold, styles.center, { color: design.ink }]} testID="schedule-confirmed-date">
                 {time}
               </Text>
             ))}
-            <Text style={[textStyles.subheadline, styles.center, { color: SCHEDULE_SECONDARY }]} testID="festival-confirmation-recipients">{`For all ${plans.length} selected contact${plans.length === 1 ? '' : 's'}`}</Text>
+            <Text style={[textStyles.subheadline, styles.center, { color: design.secondary }]} testID="festival-confirmation-recipients">{`For all ${plans.length} selected contact${plans.length === 1 ? '' : 's'}`}</Text>
           </View>
           {wish ? <ScheduleWishCard heading={wish.heading} message={wish.message} occasion={occasion} /> : null}
           <ActionButton title="Done" onPress={done} testID="wish-primary" />
         </ScrollView>
         {['birthday', 'anniversary', 'festival'].includes(occasion) ? <MomentConfetti width={size.width} height={size.height} /> : null}
       </View>
-    </FixedScheme>
+    </>
   );
 }
 
@@ -608,7 +637,7 @@ const styles = StyleSheet.create({
   emojiText: { fontSize: 48, lineHeight: 58 },
   // `ScheduleActionStyle`: `.headline`, 16 vertical, 18 corners.
   action: { minHeight: 54, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 12 },
-  reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, backgroundColor: '#FFFFFF' },
+  reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
   reviewIcon: { width: 44, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   edit: { padding: 12, borderRadius: 12 },
   showMore: { minHeight: 44, justifyContent: 'center' },
@@ -618,7 +647,7 @@ const styles = StyleSheet.create({
   deliveryButtonStacked: { flexGrow: 0, flexBasis: 'auto' },
   deliveryButton: { flexGrow: 1, flexBasis: 150 },
   editor: { gap: 18 },
-  field: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(60, 60, 67, 0.29)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 8, fontSize: 17, color: SCHEDULE_INK, backgroundColor: '#FFFFFF' },
+  field: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 8, fontSize: 17 },
   sendNowCard: { gap: 8, padding: 16, borderRadius: 16 },
   success: { padding: 24, gap: 24, alignItems: 'stretch' },
   check: { width: 132, height: 132, borderRadius: 66, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginTop: 32 },
