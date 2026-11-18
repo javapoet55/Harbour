@@ -131,14 +131,14 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
         </View>
       </ScrollView>
       {/*
-        `.safeAreaInset(edge: .bottom)` (897f14d): Got it! and Back to Home stay pinned on a
+        `.safeAreaInset(edge: .bottom)` (897f14d): Continue and Back to Home stay pinned on a
         `.regularMaterial` bar while the steps scroll under it. The material is the guide's fixed light one.
       */}
       <View style={[styles.pinned, { paddingBottom: 8 + insets.bottom }]} testID="module-guide-bar">
         <View style={styles.pinnedContent}>
-          <Pressable accessibilityLabel="Got it!" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
+          <Pressable accessibilityLabel="Continue" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
             <LinearGradient colors={[withAlpha(guide.color, 0.75), guide.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primary}>
-              <Text style={styles.primaryText}>Got it!</Text>
+              <Text style={styles.primaryText}>Continue</Text>
             </LinearGradient>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onHome} style={styles.home} testID="module-guide-home">

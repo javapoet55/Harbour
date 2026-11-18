@@ -11,7 +11,7 @@ export default async function AdminRevenuePage() {
     {label:'Nexdo Max',value:data.planCounts.MAX,color:'#7654e8'},
     {label:'Free',value:data.planCounts.FREE,color:'#a8b5c9'},
   ];
-  return <>
+  return <div className="admin-analytics-page">
     <PageHeading title="Revenue" description="Monitor current plan mix and estimated recurring revenue."><DatePill days={30}/></PageHeading>
     <div className="admin-callout"><CircleDollarSign size={20}/><div><strong>Revenue is currently estimated.</strong><br/>The app stores plan selections but does not yet have a payment transaction ledger. Estimates use $9.99/month for Pro and $19.99/month for Max; no invoices or payments are inferred.</div></div>
     <div className="admin-metrics">
@@ -25,5 +25,5 @@ export default async function AdminRevenuePage() {
       <Panel title="Users by plan" className="admin-span-7"><ProgressList rows={planRows}/></Panel>
       <Panel title="Revenue data readiness" className="admin-span-12"><table className="admin-list"><tbody><tr><td>Plan selections</td><td><span className="admin-status">Available</span></td></tr><tr><td>Monthly estimates</td><td><span className="admin-status">Available</span></td></tr><tr><td>Payment transactions</td><td><span className="admin-status pending">Payment provider needed</span></td></tr><tr><td>Refunds, churn, and invoices</td><td><span className="admin-status pending">Payment provider needed</span></td></tr></tbody></table></Panel>
     </div>
-  </>;
+  </div>;
 }

@@ -1,3 +1,5 @@
+import { phonePlatform } from '@/server/account-device';
+import { prisma } from '@/server/db';
 import { signupProof } from '@/server/account-auth';
 import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
@@ -16,6 +18,14 @@ async function healthHandlerPOST(req: Request) {
     return NextResponse.json({ code: 'EMAIL_NOT_VERIFIED', verificationProof: signupProof(user), error: 'Verify your email address to sign in.', email: user.email }, { status: 403 });
   }
   await writeSession(user.id);
+  const platform = phonePlatform(req.headers.get('user-agent'));
+  if (platform) {
+    await prisma.userMemory.upsert({
+      where: { userId_key: { userId: user.id, key: 'device:login' } },
+      create: { userId: user.id, key: 'device:login', value: platform, kind: 'device', source: 'login' },
+      update: { value: platform },
+    }).catch(() => { /* Device reporting must not prevent sign-in. */ });
+  }
   const admin = isAdminEmail(user.email);
   // Admins land in the standalone admin app when it is configured; otherwise they use the app like anyone else.
   const adminApp = admin ? adminAppUrl()?.toString() : undefined;

@@ -19,7 +19,7 @@ function backendConfig() {
 }
 
 export type BackendOptions = {
-  method?: 'GET' | 'POST' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   token?: string | null;
   body?: unknown;
   clientIp?: string | null;

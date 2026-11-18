@@ -36,3 +36,14 @@ it('reports missing food data and provider failures without inventing facts', as
   const response = await POST(foodRequest('lookup_food'));
   const body = await response.json(); expect(body.success).toBe(false); expect(JSON.stringify(body)).not.toContain('credential');
 });
+
+it('passes the app-selected folder separately from the voice arguments', async () => {
+  const args = { title: 'Review estimates' };
+  const response = await POST(new Request('https://nexdo.test/api/realtime/tool', { method: 'POST', body: JSON.stringify({
+    consent: true, sessionId: '11111111-1111-4111-8111-111111111111', callId: 'c',
+    name: 'create_task', arguments: args, projectId: 'folder123',
+  }) }));
+  expect(response.status).toBe(200);
+  expect(mocks.validateVoiceTool).toHaveBeenCalledWith('create_task', args);
+  expect(mocks.executeVoiceTool).toHaveBeenCalledWith('user', '11111111-1111-4111-8111-111111111111', 'c', 'create_task', args, 'folder123');
+});

@@ -9,7 +9,8 @@ it('keeps date-filtered detail rows and current totals separate',()=>{
  expect(overviewDetails(data,'users').rows).toHaveLength(2);
  expect(overviewDetails(data,'signups').rows).toHaveLength(1);
  expect(overviewDetails(data,'active').rows).toHaveLength(1);
- expect(overviewDetails(data,'mrr').rows[0][2]).toBe('$9.99');
+ data.deviceCounts={iPhone:1,Android:0,otherOrUnknown:1};
+ expect(overviewDetails(data,'devices').rows).toEqual([['iPhone',1],['Android',0],['Other or unknown',1]]);
  expect(overviewDetails(data,'signups').rows[0][2]).toContain('Sep 9, 2026');
 });
 it('uses all available voice and action records for drilldowns',()=>{

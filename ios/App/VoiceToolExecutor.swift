@@ -8,6 +8,9 @@ final class VoiceToolExecutor: VoiceToolExecuting {
     private let contacts = AppleTaskActionContacts()
     private var candidates: [String: ActionContact] = [:]
     private var ownerID: String?
+    private let projectID: String?
+
+    init(projectID: String? = nil) { self.projectID = projectID }
     func attach(_ model: AppModel) { self.model = model; ownerID = model.profile?.id }
     func clear() { candidates.removeAll() }
     func execute(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
@@ -35,6 +38,6 @@ final class VoiceToolExecutor: VoiceToolExecuting {
             do { return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, foodOnly: true) }
             catch { return Data("{\"success\":false,\"error\":\"Food lookup unavailable. Explain the missing information; do not invent product facts.\"}".utf8) }
         }
-        return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, calendarOnly: calendarOnly, foodOnly: foodOnly)
+        return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, calendarOnly: calendarOnly, foodOnly: foodOnly, projectID: projectID)
     }
 }

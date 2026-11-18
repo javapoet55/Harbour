@@ -44,7 +44,7 @@ describe('Wellness chooser hero in dark (1a9a89a)', () => {
   });
 });
 
-describe('Module guides pin Got it! and Back to Home (897f14d)', () => {
+describe('Module guides pin Continue and Back to Home (897f14d)', () => {
   it.each(['calories', 'pomodoro', 'moments', 'shopping'] as const)('the %s guide keeps both buttons outside the scrolling steps', async (kind) => {
     const view = await render(<WellnessModuleGuide kind={kind} onContinue={jest.fn()} onHome={jest.fn()} />);
     const scroll = view.getByTestId('module-guide-scroll');

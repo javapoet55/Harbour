@@ -21,42 +21,42 @@ struct ProjectsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(spacing: 10) {
-                        ProjectSearchField(placeholder: "Search projects", text: $search)
+                        ProjectSearchField(placeholder: "Search Folders", text: $search)
                         Menu {
-                            Picker("Sort projects", selection: $sort) { ForEach(ProjectSort.allCases) { Text($0.rawValue).tag($0) } }
+                            Picker("Sort folders", selection: $sort) { ForEach(ProjectSort.allCases) { Text($0.rawValue).tag($0) } }
                         } label: {
                             Image(systemName: "slider.horizontal.3").font(.title3).frame(width: 48, height: 50)
                                 .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
-                        }.accessibilityLabel("Sort projects").accessibilityValue(sort.rawValue)
+                        }.accessibilityLabel("Sort folders").accessibilityValue(sort.rawValue)
                     }
                     HStack {
-                        Text("Projects").font(.title2.bold())
+                        Text("Folders").font(.title2.bold())
                         Spacer()
-                        Button { adding = true } label: { Label("New project", systemImage: "plus").font(.subheadline.weight(.semibold)).frame(minHeight: 44) }
+                        Button { adding = true } label: { Label("New Folder", systemImage: "plus").font(.subheadline.weight(.semibold)).frame(minHeight: 44) }
                     }
-                    if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading projects…").frame(maxWidth: .infinity).padding() }
+                    if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading folders…").frame(maxWidth: .infinity).padding() }
                     if let error = model.projectsError {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(error).font(.subheadline)
-                            if model.projectsLoaded { Text("Showing saved projects.").font(.caption).foregroundStyle(.secondary) }
+                            if model.projectsLoaded { Text("Showing saved folders.").font(.caption).foregroundStyle(.secondary) }
                             Button("Retry") { Task { await model.refreshProjects() } }.frame(minHeight: 44)
                         }.accessibilityElement(children: .contain)
                     }
-                    if model.projectsLoaded && visible.isEmpty && (search.isEmpty || !CalendarSearch.matches("No Named Project", query: search)) {
-                        ContentUnavailableView(search.isEmpty ? "Organize your tasks" : "No matching projects", systemImage: "folder", description: Text(search.isEmpty ? "Create a project to keep related tasks together." : "Try a different project name."))
+                    if model.projectsLoaded && visible.isEmpty && (search.isEmpty || !CalendarSearch.matches("No Named Folder", query: search)) {
+                        ContentUnavailableView(search.isEmpty ? "Organize your tasks" : "No matching folders", systemImage: "folder", description: Text(search.isEmpty ? "Create a folder to keep related tasks together." : "Try a different folder name."))
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize || geometry.size.width < 340 ? 1 : 2), alignment: .leading, spacing: 12) {
                         ForEach(visible) { project in
                             NavigationLink { ProjectDetailView(projectID: project.id) } label: { ProjectCard(project: project) }.buttonStyle(.plain)
                         }
                     }
-                    if model.projectsLoaded && CalendarSearch.matches("No Named Project", query: search) {
+                    if model.projectsLoaded && CalendarSearch.matches("No Named Folder", query: search) {
                         NavigationLink { ProjectDetailView(projectID: nil) } label: {
                             HStack(spacing: 16) {
                                 ProjectFolder(color: .secondary)
                                 let unassigned = model.tasks.filter { $0.projectId == nil && $0.status != "CANCELLED" }
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text("No Named Project").font(.headline)
+                                    Text("No Named Folder").font(.headline)
                                     Text("Open: \(unassigned.filter { !$0.isDone }.count)   Done: \(unassigned.filter(\.isDone).count)")
                                         .font(.subheadline).foregroundStyle(.secondary)
                                 }
@@ -84,7 +84,7 @@ private struct ProjectCard: View {
             ProgressView(value: project.progress).tint(ProjectStyle.color(project.color))
                 .accessibilityLabel("Completion").accessibilityValue("\(project.completedTaskCount) of \(project.totalTaskCount) tasks completed")
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).projectCardSurface()
-            .accessibilityElement(children: .combine).accessibilityHint("Opens project tasks")
+            .accessibilityElement(children: .combine).accessibilityHint("Opens folder tasks")
     }
 }
 private struct ProjectFolder: View {
@@ -126,8 +126,8 @@ struct ProjectEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Project name") {
-                    TextField("Name", text: $name).focused($nameFocused).submitLabel(.done).onSubmit(save).accessibilityLabel("Project name")
+                Section("Folder name") {
+                    TextField("Name", text: $name).focused($nameFocused).submitLabel(.done).onSubmit(save).accessibilityLabel("Folder name")
                     if !name.isEmpty && !ProjectQuery.validName(name) { Text("Use 1–80 characters, excluding surrounding spaces.").font(.caption).foregroundStyle(.red) }
                 }
                 Section("Color") {
@@ -141,9 +141,9 @@ struct ProjectEditorView: View {
                     }
                 }
                 if let error { Section { Text(error).foregroundStyle(.red); Button("Retry", action: save).disabled(saving || !ProjectQuery.validName(name)) } }
-                if saving { ProgressView("Saving project…") }
+                if saving { ProgressView("Saving folder…") }
             }
-            .navigationTitle(project == nil ? "Add Project" : "Edit Project").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(project == nil ? "New Folder" : "Edit Folder").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeProjectEditor() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) { Button("Done", action: save).disabled(saving || model.projectMutationBusy || !ProjectQuery.validName(name)) }
@@ -198,9 +198,9 @@ struct ProjectDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
                         ProjectFolder(color: project.map { ProjectStyle.color($0.color) } ?? .secondary)
-                        Text(project?.name ?? "No Named Project").font(.title2.bold())
+                        Text(project?.name ?? "No Named Folder").font(.title2.bold())
                         Spacer()
-                        TodayHeaderButton(icon: "plus", label: "Add task to \(project?.name ?? "No Named Project")") {
+                        TodayHeaderButton(icon: "plus", label: "Add task to \(project?.name ?? "No Named Folder")") {
                             adding = true
                         }
                         .disabled(deleting || missing)
@@ -211,12 +211,12 @@ struct ProjectDetailView: View {
                             Picker("Status", selection: $status) { ForEach(["All", "Open", "Completed"], id: \.self) { Text($0) } }
                             Picker("Priority", selection: $priority) { ForEach(["All", "LOW", "NORMAL", "HIGH", "CRITICAL"], id: \.self) { Text($0.capitalized).tag($0) } }
                             Button("Reset filters") { status = "Open"; priority = "All" }
-                        } label: { Image(systemName: "slider.horizontal.3").frame(width: 48, height: 48) }.accessibilityLabel("Filter project tasks")
+                        } label: { Image(systemName: "slider.horizontal.3").frame(width: 48, height: 48) }.accessibilityLabel("Filter folder tasks")
                     }
                     if let error { Text(error).foregroundStyle(.red) }
                     if model.tasksLoadFailed { Text("Couldn’t refresh tasks. Showing saved tasks."); Button("Retry") { Task { await model.refreshTasks() } } }
                     if model.tasksLoading && model.tasks.isEmpty { ProgressView("Loading tasks…") }
-                    else if missing { ContentUnavailableView("Project unavailable", systemImage: "folder.badge.questionmark", description: Text("This project may have been deleted.")) }
+                    else if missing { ContentUnavailableView("Folder unavailable", systemImage: "folder.badge.questionmark", description: Text("This folder may have been deleted.")) }
                     else {
                         if !tasks.isEmpty {
                             Text("\(tasks.count) \(tasks.count == 1 ? "task" : "tasks")")
@@ -241,7 +241,7 @@ struct ProjectDetailView: View {
                                     .background(ProjectStyle.color(project?.color ?? "#8875ff"), in: Capsule())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Add task to \(project?.name ?? "project")")
+                            .accessibilityLabel("Add task to \(project?.name ?? "folder")")
                         }
                         LazyVStack(spacing: 12) {
                             ForEach(tasks) { task in
@@ -255,23 +255,23 @@ struct ProjectDetailView: View {
             }.scrollDismissesKeyboard(.interactively).refreshable { await model.refreshTasks(); await model.refreshProjects() }
         }
         .foregroundStyle(Color.nexdoInk).tint(ProjectStyle.accent)
-        .navigationTitle(project?.name ?? "No Named Project").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+        .navigationTitle(project?.name ?? "No Named Folder").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Add task", systemImage: "plus") { adding = true }
                     if project != nil {
-                        Button("Edit project", systemImage: "pencil") { editing = true }
-                        Button("Delete project", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                        Button("Edit folder", systemImage: "pencil") { editing = true }
+                        Button("Delete folder", systemImage: "trash", role: .destructive) { confirmingDelete = true }
                     }
-                } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }.disabled(deleting || missing).accessibilityLabel("Project actions")
+                } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }.disabled(deleting || missing).accessibilityLabel("Folder actions")
             }
         }
-        .confirmationDialog("Delete this project?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Delete project", role: .destructive) { remove() }
+        .confirmationDialog("Delete this folder?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete folder", role: .destructive) { remove() }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("Its tasks will move to No Named Project. No tasks will be deleted.") }
-        .overlay { if deleting { ProgressView("Deleting project…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
+        } message: { Text("Its tasks will move to No Named Folder. No tasks will be deleted.") }
+        .overlay { if deleting { ProgressView("Deleting folder…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
         .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil, initialProjectID: projectID) } }
         .sheet(isPresented: $editing) { if let project { ProjectEditorView(project: project) } }
         .sheet(item: $selectedTask) { task in NavigationStack { TaskEditor(task: task) } }
@@ -300,17 +300,17 @@ struct ProjectAssignmentField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Menu {
-                Button("No Named Project") { projectID = nil }
+                Button("No Named Folder") { projectID = nil }
                 ForEach(ProjectQuery.results(model.projects, search: "", sort: .name)) { project in
                     Button { projectID = project.id } label: { Label(project.name, systemImage: project.id == projectID ? "checkmark" : "folder").tint(ProjectStyle.color(project.color)) }
                 }
             } label: {
-                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project")); Spacer(); Image(systemName: disclosureIcon).font(.caption) }
+                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No Named Folder" : "Assigned folder")); Spacer(); Image(systemName: disclosureIcon).font(.caption) }
                     .padding(.horizontal, 14).frame(minHeight: 48).projectCardSurface()
                     .contentShape(Rectangle())
-            }.accessibilityLabel("Project").accessibilityValue(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project"))
-            if let error = model.projectsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Retry projects") { Task { await model.refreshProjects() } }.frame(minHeight: 44) }
-            if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading projects…").font(.caption) }
+            }.accessibilityLabel("Folder").accessibilityValue(selected?.name ?? (projectID == nil ? "No Named Folder" : "Assigned folder"))
+            if let error = model.projectsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Retry folders") { Task { await model.refreshProjects() } }.frame(minHeight: 44) }
+            if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading folders…").font(.caption) }
         }.tint(ProjectStyle.accent).task { await model.refreshProjects() }
     }
 }

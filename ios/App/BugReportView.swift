@@ -18,6 +18,8 @@ struct BugReportView: View {
     @State private var discard = false
     @State private var expanded = false
     @State private var copied = false
+    @State private var historyStatus: BugReportStatus = .open
+    private var showsHistory: Bool { diagnostics.screen == "settings" }
     private let accent = Color(red: 0.39, green: 0.40, blue: 0.95)
     var body: some View {
         NavigationStack {
@@ -25,6 +27,7 @@ struct BugReportView: View {
                 VStack(spacing: 22) {
                     if let reference { success(reference) }
                     else if editing { form }
+                    else if showsHistory { history }
                     else { introduction }
                 }.padding(20).frame(maxWidth: 650).frame(maxWidth: .infinity)
             }
@@ -36,7 +39,14 @@ struct BugReportView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 Button(reference != nil ? "Done" : editing ? (error != nil && draft.frozen != nil ? "Retry Send" : "Send") : "Report Bug") {
-                    if reference != nil { finish() }
+                    if reference != nil {
+                        if showsHistory {
+                            editing = false
+                            historyStatus = .open
+                            copied = false
+                            reference = nil
+                        } else { finish() }
+                    }
                     else if editing { send() }
                     else { editing = true }
                 }
@@ -46,7 +56,7 @@ struct BugReportView: View {
                 .accessibilityIdentifier("bug.primary").padding(.horizontal, 20).padding(.vertical, 10)
                 .background(.regularMaterial)
             }
-            .navigationTitle(editing && reference == nil ? "Report app issue" : "")
+            .navigationTitle(reference != nil ? "" : editing ? "Report app issue" : showsHistory ? "Report Bugs" : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -79,6 +89,28 @@ struct BugReportView: View {
             }
         }.tint(accent).interactiveDismissDisabled()
     }
+    private var history: some View {
+        VStack(spacing: 18) {
+            Picker("Report status", selection: $historyStatus) {
+                ForEach(BugReportStatus.allCases, id: \.self) { status in
+                    Text(status.title).tag(status)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("bug.history.status")
+            BugReportHistory(status: historyStatus)
+                .id(historyStatus)
+            shakeToggle
+        }
+    }
+
+    private var shakeToggle: some View {
+        Toggle(isOn: Binding(get: { coordinator.shakeEnabled }, set: { coordinator.setShake($0) })) {
+            Label("Shake iPhone to report a bug", systemImage: "iphone.gen3.radiowaves.left.and.right")
+        }
+        .padding().background(.background, in: RoundedRectangle(cornerRadius: 18))
+    }
+
     private var introduction: some View {
         VStack(spacing: 22) {
             HStack(spacing: 12) {
@@ -92,9 +124,7 @@ struct BugReportView: View {
             BugArtwork(success: false).accessibilityHidden(true)
             Text("Report a bug?").font(.largeTitle.bold()).multilineTextAlignment(.center)
             Text("If something isn’t working correctly, you can report it to help us improve NexDo for everyone.").foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Toggle(isOn: Binding(get: { coordinator.shakeEnabled }, set: { coordinator.setShake($0) })) {
-                Label("Shake iPhone to report a bug", systemImage: "iphone.gen3.radiowaves.left.and.right")
-            }.padding().background(.background, in: RoundedRectangle(cornerRadius: 18))
+            shakeToggle
             Label("Thank you! Your feedback helps make NexDo better for everyone.", systemImage: "heart.fill")
                 .padding().background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 18))
             Text("Together we make NexDo better!").font(.title3.italic()).foregroundStyle(accent)
@@ -194,6 +224,82 @@ struct BugReportView: View {
         }
     }
     private func finish() { draft.clear(); onDone() }
+}
+
+private struct BugReportHistory: View {
+    @EnvironmentObject private var model: AppModel
+    let status: BugReportStatus
+    @State private var reports: [SubmittedBugReport] = []
+    @State private var nextCursor: String?
+    @State private var loading = false
+    @State private var loaded = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let error {
+                Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red)
+                    .accessibilityIdentifier("bug.history.error")
+            }
+            if loaded && reports.isEmpty {
+                Text(status == .open ? "No open bug reports." : "No closed bug reports.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(reports) { report in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(report.description).font(.body).fixedSize(horizontal: false, vertical: true)
+                    Label(report.detailedStatus?.title ?? report.status.title, systemImage: report.status == .open ? "circle" : "checkmark.circle")
+                        .font(.subheadline.weight(.semibold))
+                    if let date = MomentDates.parseInstant(report.createdAt) ?? ISO8601DateFormatter().date(from: report.createdAt) {
+                        Text("Submitted \(date.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Text(report.reference).font(.footnote.monospaced()).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityElement(children: .combine)
+            }
+            if loading { ProgressView("Loading reports…") }
+            if loaded || error != nil {
+                Button(error != nil && !loaded ? "Retry" : "Refresh reports", systemImage: "arrow.clockwise") {
+                    Task { await load() }
+                }.disabled(loading)
+            }
+            if let nextCursor {
+                Button("Load more reports") { Task { await load(after: nextCursor) } }
+                    .disabled(loading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { await load() }
+    }
+
+    private func load(after cursor: String? = nil) async {
+        guard !loading else { return }
+        loading = true
+        error = nil
+        defer { loading = false }
+
+        do {
+            let page = try await model.bugReportHistory(status: status, cursor: cursor)
+            try Task.checkCancellation()
+            if cursor == nil { reports = page.reports }
+            else { reports.append(contentsOf: page.reports) }
+            nextCursor = page.nextCursor
+            loaded = true
+        } catch {
+            guard !Task.isCancelled else { return }
+            switch error {
+            case APIError.signedOut:
+                self.error = "Your session has expired. Sign in again to view your reports."
+            case APIError.response(404), APIError.server(404, _), APIError.response(405), APIError.server(405, _):
+                self.error = "Report history is unavailable on this server."
+            default:
+                self.error = "Couldn’t load your bug reports. Try again."
+            }
+        }
+    }
 }
 
 // Use the supplied atlas unchanged. Text and controls remain native and scalable.

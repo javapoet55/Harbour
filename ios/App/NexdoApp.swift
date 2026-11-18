@@ -606,10 +606,14 @@ final class AppModel: ObservableObject {
         if let usage:VoiceUsage=try? await api.request("/api/voice/usage",method:"POST",body:JSONEncoder().encode(Input(sessionId:sessionID.uuidString,durationSeconds:duration)),timeout:15),profile?.id==owner {voiceUsage=usage}
     }
 
-    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false, foodOnly: Bool = false) async throws -> Data {
+    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false, foodOnly: Bool = false, projectID: String? = nil) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
-        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": foodOnly ? "food" : calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        var payload: [String: Any] = ["consent": true, "scope": foodOnly ? "food" : calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args]
+        if let projectID, name == "create_task" || name == "create_reminder" {
+            payload["projectId"] = projectID
+        }
+        let body = try JSONSerialization.data(withJSONObject: payload)
         if foodOnly {
             let response: FoodVoiceLookupResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
             guard profile?.id == userID, aiConsent, voiceConsent else { throw APIError.signedOut }
@@ -891,6 +895,15 @@ final class AppModel: ObservableObject {
         focusSession = nil
         taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
     }
+    func bugReportHistory(status: BugReportStatus, cursor: String?) async throws -> BugReportHistoryPage {
+        var query = URLComponents()
+        query.path = "/api/feedback/bugs"
+        query.queryItems = [URLQueryItem(name: "status", value: status.rawValue)]
+        if let cursor { query.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        guard let path = query.string else { throw APIError.invalidResponse }
+        return try await api.request(path)
+    }
+
     func submitBugReport(_ input: BugReportInput) async throws -> BugReportReceipt {
         try await api.request("/api/feedback/bugs", method: "POST", body: JSONEncoder().encode(input))
     }
@@ -937,7 +950,7 @@ extension AppModel {
         } catch {
             guard !Task.isCancelled, profile?.id == userID, projectLoadID == id, projectRevision == revision else { return }
             if case APIError.signedOut = error { await reset(); self.error = "Your session expired. Please sign in again." }
-            else { projectsError = "Couldn’t refresh projects. Check your connection and try again." }
+            else { projectsError = "Couldn’t refresh folders. Check your connection and try again." }
         }
     }
     func saveProject(id: String?, name: String, color: String) async throws {

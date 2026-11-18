@@ -9,7 +9,8 @@ import { requireUser } from '@/server/auth';
 import { requireAdmin } from '@/server/admin-auth';
 import { emailProvider } from '@/providers';
 import { bugSchema, maintainBugReports, referenceFor, saveBug } from './bugs';
-import { POST } from '@/app/api/feedback/bugs/route';
+import { GET as history, POST } from '@/app/api/feedback/bugs/route';
+import { PATCH as updateStatus } from '@/app/api/admin/feedback/bugs/route';
 import { GET } from '@/app/api/admin/feedback/bugs/[id]/screenshot/route';
 const owners: string[] = [];
 const input = () => ({ id: randomUUID(), description: 'The calendar button does not respond.', screenshotConsent: false, metadata: {
@@ -138,8 +139,54 @@ it('lists newly created tickets for admins without exposing screenshots and excl
   const data = await response.json();
   expect(data.bugs.find((bug: { id: string }) => bug.id === body.id)).toEqual({
     id: body.id, reference: referenceFor(body.id), description: body.description,
-    createdAt: expect.any(String), metadata: body.metadata, hasScreenshot: false,
+    createdAt: expect.any(String), status: 'open', metadata: body.metadata, hasScreenshot: false,
   });
   await prisma.bugReport.update({ where: { id: body.id }, data: { expiresAt: new Date(0) } });
   expect((await (await list(request())).json()).bugs.some((bug: { id: string }) => bug.id === body.id)).toBe(false);
+});
+
+it('shows only the signed-in user’s reports and tracks all five admin statuses', async () => {
+  const owner = await user();
+  const other = await user();
+  const body = input();
+  await saveBug(owner, body);
+  await saveBug(other, input());
+  await prisma.feedback.create({ data: {
+    id: randomUUID(), userId: owner.id, customerName: owner.name,
+    title: 'Feedback', description: 'General feedback', stars: 4,
+  } });
+  const list = (status: string) => history(new Request(`http://localhost/api/feedback/bugs?status=${status}`));
+  const update = (status: string) => updateStatus(new Request('http://localhost/api/admin/feedback/bugs', {
+    method: 'PATCH', body: JSON.stringify({ id: body.id, status }),
+  }));
+  const expected = {
+    id: body.id, reference: referenceFor(body.id), description: body.description,
+    createdAt: expect.any(String), status: 'open', detailedStatus: 'open',
+  };
+
+  vi.mocked(requireUser).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
+  expect((await list('open')).status).toBe(401);
+  vi.mocked(requireUser).mockResolvedValue({ ...owner, preference: null });
+  expect(await (await list('open')).json()).toEqual({ reports: [expected], nextCursor: null });
+  expect(await (await list('closed')).json()).toEqual({ reports: [], nextCursor: null });
+
+  vi.mocked(requireAdmin).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
+  expect((await update('closed')).status).toBe(401);
+  expect((await update('invalid')).status).toBe(400);
+  for (const [detailedStatus, status] of [
+    ['in_progress', 'open'], ['future', 'open'], ['not_applicable', 'closed'], ['closed', 'closed'], ['open', 'open'],
+  ]) {
+    const response = await update(detailedStatus);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: detailedStatus });
+    expect((await prisma.bugReport.findUniqueOrThrow({ where: { id: body.id } })).status).toBe(detailedStatus);
+    expect(await (await list(status)).json()).toEqual({
+      reports: [{ ...expected, status, detailedStatus }], nextCursor: null,
+    });
+    expect(await (await list(status === 'open' ? 'closed' : 'open')).json()).toEqual({ reports: [], nextCursor: null });
+  }
+
+  await prisma.bugReport.update({ where: { id: body.id }, data: { expiresAt: new Date(0) } });
+  expect(await (await list('open')).json()).toEqual({ reports: [], nextCursor: null });
+  expect((await update('closed')).status).toBe(404);
 });

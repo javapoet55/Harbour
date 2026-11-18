@@ -15,9 +15,9 @@ export default async function AdminVoicePage({searchParams}:{searchParams:Promis
   const range = parseAdminDateRange(params.from, params.to);
   const [data,tokens,apiCosts] = await Promise.all([adminData(`/api/admin/snapshot?${rangeQuery(range)}`,adminSnapshotSchema), adminData(`/api/admin/voice-tokens?${rangeQuery(range)}`,voiceTokensSchema), adminData(`/api/admin/api-costs?${rangeQuery(range)}`,apiCostReportSchema)]);
   const label = adminDateRangeLabel(range);
-  return <>
+  return <div className="admin-analytics-page">
     <PageHeading title="Voice Analytics" description="Track general AI requests, voice APIs, Realtime usage, and estimated costs."><AdminDateRangeFilter key={`${range.from}-${range.to}`} from={range.from} to={range.to} today={new Date().toISOString().slice(0,10)} label={label} pathname="/voice"/></PageHeading>
     <ApiCosts rows={apiCosts} realtime={tokens}/>
     <VoiceAnalytics key={`${range.from}-${range.to}`} tokens={tokens} rangeLabel={label} records={data.voiceRecords} trend={data.trends.voiceMinutes} change={data.changes.voiceMinutes}/>
-  </>;
+  </div>;
 }

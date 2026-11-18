@@ -39,8 +39,8 @@ private final class VoiceSessionResources: ObservableObject {
     let transport: VoiceWebRTCTransport
     let session: VoiceConversationSession
 
-    init(calendarOnly: Bool, foodOnly: Bool) {
-        let executor = VoiceToolExecutor()
+    init(calendarOnly: Bool, foodOnly: Bool, projectID: String?) {
+        let executor = VoiceToolExecutor(projectID: projectID)
         executor.calendarOnly = calendarOnly
         executor.foodOnly = foodOnly
         let transport = VoiceWebRTCTransport()
@@ -56,11 +56,11 @@ struct AddTaskByVoiceView: View {
     private let calendarOnly: Bool
     private let foodContext: FoodVoiceContext?
 
-    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) {
+    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil, projectID: String? = nil) {
         self.askMode = askMode
         self.calendarOnly = calendarOnly
         self.foodContext = foodContext
-        _resources = StateObject(wrappedValue: VoiceSessionResources(calendarOnly: calendarOnly, foodOnly: foodContext != nil))
+        _resources = StateObject(wrappedValue: VoiceSessionResources(calendarOnly: calendarOnly, foodOnly: foodContext != nil, projectID: projectID))
     }
 
     var body: some View {
@@ -82,7 +82,7 @@ private struct VoiceConversationView: View {
     @State private var routingSpeaker = false
     @State private var speakerError: String?
     @State private var audioOutput = "Device audio"
-    @State private var consent = false
+    @State private var startupRequest: UUID?
     @State private var starting = false
     @State private var microphoneDenied = false
     @State private var isVisible = false
@@ -108,6 +108,8 @@ private struct VoiceConversationView: View {
         self.transport = resources.transport
         _voice = ObservedObject(wrappedValue: resources.session)
     }
+    private var needsConsent: Bool { !model.aiConsent || !model.voiceConsent }
+
     var body: some View {
         ZStack {
             Color(uiColor: .systemBackground).ignoresSafeArea()
@@ -138,11 +140,10 @@ private struct VoiceConversationView: View {
                             }
                             .buttonStyle(.borderedProminent)
                         }
-                        if voice.phase == .idle && !starting && !microphoneDenied && startupError == nil {
-                            Button("Start listening") {
-                                if model.aiConsent && model.voiceConsent { Task { await start() } }
-                                else { consent = true }
-                            }
+                        if needsConsent && isVisible {
+                            consentCard
+                        } else if voice.phase == .idle && !starting && !microphoneDenied && startupError == nil {
+                            Button("Start listening") { startupRequest = UUID() }
                             .buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("voice-start-listening")
                         }
@@ -151,7 +152,7 @@ private struct VoiceConversationView: View {
                                 .buttonStyle(.borderedProminent)
                         } else if (startupError != nil || voice.phase == .connectionLost) && !recovering {
                             Button("Try again") {
-                                if voice.phase == .idle { Task { await start() } }
+                                if voice.phase == .idle { startupRequest = UUID() }
                                 else { beginAutomaticRecovery(resetAttempts: true) }
                             }
                                 .buttonStyle(.borderedProminent).disabled(starting)
@@ -190,7 +191,7 @@ private struct VoiceConversationView: View {
                     Spacer()
                     Button { updateAudioOutput(); showingSpeaker = true; activateDeviceSpeaker() } label: {
                         Label("Speaker", systemImage: "speaker.wave.2.fill")
-                    }.accessibilityIdentifier("voice-speaker")
+                    }.accessibilityIdentifier("voice-speaker").disabled(needsConsent)
                     Spacer()
                     Button { voice.finish(); if voice.phase == .idle { dismiss() } } label: { Text("Done").foregroundStyle(.white) }
                         .buttonStyle(.borderedProminent).disabled(voice.phase == .closing)
@@ -223,22 +224,15 @@ private struct VoiceConversationView: View {
                 if let speakerError { Text(speakerError).foregroundStyle(.red) }
             }.padding(24).presentationDetents([.medium, .large])
         }
-        .alert(foodContext != nil ? "Ask about food by voice?" : calendarOnly ? "Use voice to add calendar events?" : "Use voice to manage tasks?", isPresented: $consent) {
-            Button("Allow and start") { model.aiConsent = true; model.voiceConsent = true; Task { await start() } }
-            Button("Not now", role: .cancel) { dismiss() }
-        } message: { Text(foodContext != nil ? "Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list." : "Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.") }
-        .task {
-            // Establish visibility in the same lifecycle callback that starts
-            // voice. onAppear and task ordering must not decide whether the
-            // microphone session starts or silently stays idle.
-            isVisible = true
+        .task(id: startupRequest) {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") || ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") { return }
             #endif
+            isVisible = true
             voice.onClose = { dismiss() }
             voice.onTokenUsage = { receipt in Task { await model.recordVoiceTokens(receipt) } }
             voice.onTelemetry = { _ in Task{await model.recordVoiceUsage(sessionID:usageSessionID,duration:activeVoiceSeconds)} }
-            if model.aiConsent && model.voiceConsent { await start() } else { consent = true }
+            if !needsConsent { await start() }
         }
         .onReceive(clock) { _ in
             voice.tick()
@@ -266,7 +260,15 @@ private struct VoiceConversationView: View {
                 beginAutomaticRecovery(resetAttempts: true)
             }
         }
-        .onDisappear { isVisible = false; recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
+        .onDisappear {
+            isVisible = false
+            recoveryTask?.cancel()
+            readyBell?.stop()
+            voice.onClose = nil
+            voice.close()
+            executor.clear()
+            endBackgroundTask()
+        }
         .onChange(of: scenePhase) { _, phase in
             // Permission setup has no live session to suspend (including trips to Settings).
             guard voice.phase != .idle else { return }
@@ -278,7 +280,7 @@ private struct VoiceConversationView: View {
                 if voice.phase == .connectionLost { beginAutomaticRecovery() }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { event in
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification).receive(on: DispatchQueue.main)) { event in
             guard let raw = event.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
             if type == .began { voice.pauseForAudioInterruption() }
@@ -289,7 +291,7 @@ private struct VoiceConversationView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { event in
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification).receive(on: DispatchQueue.main)) { event in
             updateAudioOutput()
             if (event.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
                 Task { await voice.recoverAudioRoute() }
@@ -299,6 +301,28 @@ private struct VoiceConversationView: View {
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { voice.close() } }
         .onChange(of: model.voiceConsent) { _, allowed in if !allowed { voice.close() } }
     }
+    private var consentCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(foodContext != nil ? "Ask about food by voice?" : calendarOnly ? "Use voice to add calendar events?" : "Use voice to manage tasks?")
+                .font(.headline)
+            Text(foodContext != nil
+                 ? "Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list."
+                 : "Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.")
+                .font(.subheadline)
+                .foregroundStyle(Color.nexdoSecondary)
+            Button("Allow and start") {
+                model.aiConsent = true
+                model.voiceConsent = true
+                startupRequest = UUID()
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Not now") { dismiss() }.buttonStyle(.borderless)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
+    }
+
     private var canRouteSpeaker: Bool {
         !routingSpeaker && !starting && !recovering && ![.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase)
     }
@@ -321,16 +345,16 @@ private struct VoiceConversationView: View {
         if audioOutput.isEmpty { audioOutput = "Device audio" }
     }
     private func start() async {
-        guard !starting, voice.phase == .idle else { return }
+        guard !starting, !needsConsent, voice.phase == .idle, let owner = model.profile?.id else { return }
         starting = true; startupError = nil; microphoneDenied = false; defer { starting = false }
         executor.attach(model)
         do {
             try await VoicePermissionGate.authorize { await AVAudioApplication.requestRecordPermission() }
             try Task.checkCancellation()
-            guard isVisible else { return }
+            guard isVisible, !needsConsent, model.profile?.id == owner else { return }
             let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly, foodContext: foodContext)
             try Task.checkCancellation()
-            guard isVisible else { return }
+            guard isVisible, !needsConsent, model.profile?.id == owner else { return }
             voice.start(credential: credential)
         } catch VoicePermissionGate.Failure.microphoneDenied {
             microphoneDenied = true
