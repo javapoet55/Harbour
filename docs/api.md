@@ -5,7 +5,8 @@ All routes except `/api/auth/login` require the `harbor_session` cookie.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/auth/login` | Email/password sign-in |
-| POST | `/api/auth/logout` | Clear session |
+| POST | `/api/auth/logout` | Sign this device out (ends its server-side session) |
+| POST | `/api/auth/logout-everywhere` | Sign out every browser and app of the account, this one included |
 | GET | `/api/me` | Current user and preferences |
 | GET | `/api/agenda?days=3` | Tasks, events, overdue, waiting, unscheduled |
 | GET/POST | `/api/tasks` | List or create a task |

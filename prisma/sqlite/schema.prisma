@@ -30,6 +30,9 @@ model User {
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
   emailVerifiedAt DateTime?
+  // Cookies signed before this moment are refused ("sign out everywhere", password change or reset).
+  sessionsRevokedAt DateTime?
+  sessions UserSession[]
 
   moments ImportantMoment[]
   momentEmailAccount MomentEmailAccount?
@@ -598,6 +601,8 @@ model AdminLoginToken {
   createdAt DateTime @default(now())
   sessionHash String? @unique
   sessionExpiresAt DateTime?
+  // Last admin request on this session; an idle session ends before its 8-hour limit.
+  sessionLastUsedAt DateTime?
   @@index([userId, createdAt])
 }
 
@@ -702,6 +707,18 @@ model PomodoroSession {
   updatedAt DateTime @updatedAt
   @@id([userId, id])
   @@index([userId, startedAt])
+}
+
+// One row per signed-in browser or app. The session cookie carries this id; deleting the row signs that device out.
+model UserSession {
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Feedback {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import './zod-csp';
 
 export const EXECUTIVE_INTENTS = ['FOCUS_TODAY', 'FIX_SCHEDULE', 'DRIVING_BRIEFING', 'FREE_WINDOW', 'NEXT_ACTION', 'COMPARE_TASKS'] as const;
 export type ExecutiveIntent = typeof EXECUTIVE_INTENTS[number];

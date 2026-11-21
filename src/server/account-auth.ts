@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from './db';
+import { revokeAllSessions } from './session-store';
 import { emailDeliveryMocked, emailProvider } from '@/providers';
 import { passwordResetMessage, verifyEmailMessage } from './email/messages';
 
@@ -186,6 +187,8 @@ export async function resetPassword(input: { email: string; code: string; passwo
     await tx.emailVerificationToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     // A valid reset code proves control of the inbox, so it also verifies the email.
     await tx.user.update({ where: { id: user.id }, data: { passwordHash, emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
+    // Whoever was signed in with the forgotten password is signed out everywhere.
+    await revokeAllSessions(user.id, tx);
     await recordPromotionEligibility(user.id, tx);
   });
 }
