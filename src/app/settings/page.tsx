@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Authed } from '@/components/authed';
 import type { PreferenceForm } from '@/lib/types';
 import { readCachedProfile, writeCachedProfile } from '@/lib/profile-cache';
+import { ChangePasswordCard, DeleteAccountCard, ReportBugCard } from '@/components/account-safety';
 
 type Connection = { id: string; provider: string; accountEmail: string; calendarName: string; visible: boolean; writeEnabled: boolean; status: string; lastSyncedAt: string | null };
 
@@ -173,7 +174,6 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-[var(--muted)]">To delete your account, contact support.</p>
           <a className="harbor-btn mt-3 inline-flex" href="/api/export" download="nexdo-export.json">Export my Nexdo data</a>
         </section>
         <section className="harbor-card p-4">
@@ -181,6 +181,9 @@ export default function SettingsPage() {
           <p className="mt-2 text-sm text-[var(--muted)]">Signs you out of Nexdo on every browser and phone, including this one. Use it if you lost a device or signed in on a shared computer.</p>
           <button type="button" className="harbor-btn mt-3" onClick={() => void signOutEverywhere()}>Sign out everywhere</button>
         </section>
+        <ChangePasswordCard />
+        <ReportBugCard />
+        <DeleteAccountCard />
       </div>
       <button type="button" className="harbor-btn harbor-btn-brand mt-4" onClick={() => void save()}>Save settings</button>
       {saved && <p className="mt-3 text-sm text-[var(--ok)]">{saved}</p>}
