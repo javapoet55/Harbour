@@ -256,10 +256,15 @@
 .tk-reminder-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #1b2142; }
 .tk-reminder-group h3 span { min-width: 24px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; text-align: center; color: #5b45f0; background: #efedff; }
 .tk-reminder-group ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.tk-reminder { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; text-align: left; border-radius: 16px; background: var(--tk-card); border: 1px solid var(--tk-line); transition: border-color .15s, box-shadow .15s; }
-.tk-reminder:hover { border-color: #c9c2fb; box-shadow: 0 6px 18px rgb(91 69 240 / .08); }
+.tk-reminder-item { display: flex; align-items: center; gap: 4px; padding-right: 8px; border-radius: 16px; background: var(--tk-card); border: 1px solid var(--tk-line); transition: border-color .15s, box-shadow .15s; }
+.tk-reminder-item:hover { border-color: #c9c2fb; box-shadow: 0 6px 18px rgb(91 69 240 / .08); }
+.tk-reminder { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; padding: 14px 8px 14px 16px; text-align: left; border-radius: 16px; background: none; }
+.tk-reminder-actions { display: flex; gap: 2px; flex: none; }
+.tk-reminder-actions button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: #4b5273; }
+.tk-reminder-actions button:hover { background: #f1f2f9; color: #3d24c4; }
+.tk-reminder-actions button.is-danger:hover { background: #fdecec; color: #b42318; }
 .tk-reminder-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #8b5cf6, #5b45f0); }
-.tk-reminder.is-past .tk-reminder-icon { color: #5b45f0; background: #efedff; }
+.tk-reminder-item.is-past .tk-reminder-icon { color: #5b45f0; background: #efedff; }
 .tk-reminder-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .tk-reminder-main strong { font-size: 16px; font-weight: 700; color: #1b2142; overflow-wrap: anywhere; }
 .tk-reminder-notes { font-size: 13px; color: #4b5273; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -297,6 +302,7 @@
 .qa-call-row { display: flex; gap: 8px; }
 .qa-call-row .nx-field { flex: 1; min-width: 0; }
 .qa-call-button.nx-primary { flex: none; min-height: 46px; padding: 0 18px; font-size: 15px; border-radius: 14px; white-space: nowrap; }
+.qa-past { color: #a15c07; }
 .qa-call-problem { font-size: 13px; color: #a12825; }
 .qa-link { border: 0; background: none; padding: 0; color: #4f46e5; font: inherit; text-decoration: underline; cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -342,7 +348,9 @@
   .tk-history-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .qa-two { grid-template-columns: 1fr; }
   .qa-delivery-options { grid-template-columns: 1fr; }
-  .tk-reminder { flex-wrap: wrap; }
+  .tk-reminder-item { align-items: flex-start; padding-right: 4px; }
+  .tk-reminder { flex-wrap: wrap; padding: 12px 4px 12px 12px; }
+  .tk-reminder-actions { flex-direction: column; padding-top: 8px; }
   .tk-reminder-main { flex: 1 1 calc(100% - 54px); }
   .tk-reminder-channels { flex: 1 1 100%; min-width: 0; max-width: none; justify-content: flex-start; padding-left: 54px; }
   .tk-tabs button svg { display: none; }

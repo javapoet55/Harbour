@@ -5,6 +5,7 @@ import { AlignLeft, Bell, BellRing, CalendarDays, Check, Clock, FileText, Mail, 
 import { scheduleFetch } from '@/lib/schedule-fetch';
 import { zonedDateTime } from '@/lib/time';
 import { ymdInZone } from '@/lib/task-list';
+import type { ReminderItem } from './reminders-panel';
 
 export type Note = { id: string; title: string; body: string; createdAt: string; updatedAt: string };
 
@@ -13,6 +14,11 @@ function nextHour(timeZone: string, now = Date.now()) {
   const next = new Date(Math.ceil((now + 60_000) / 3_600_000) * 3_600_000);
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(next).map((part) => [part.type, part.value]));
   return { date: ymdInZone(+next, timeZone), time: `${parts.hour}:${parts.minute}` };
+}
+/** The date and "HH:mm" of an instant in the account's zone. */
+function localParts(ms: number, timeZone: string) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
+  return { date: ymdInZone(ms, timeZone), time: `${parts.hour}:${parts.minute}` };
 }
 function addMinutes(time: string, minutes: number) {
   const [hour, minute] = time.split(':').map(Number);
@@ -53,33 +59,44 @@ function Sheet({ id, title, busy, canSave, saveLabel, onClose, onSubmit, childre
  * Quick Add → Reminder: a short item that notifies at its own time. It is saved as a five-minute
  * reminder task, the same way the voice assistant saves one, and appears in the task list.
  */
-export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string; onClose: () => void; onSaved: (title: string, at: number) => void }) {
-  const start = nextHour(timeZone);
+export function ReminderSheet({ timeZone, reminder, onClose, onSaved, onDeleted }: {
+  timeZone: string; reminder?: ReminderItem | null; onClose: () => void; onSaved: (title: string, at: number) => void; onDeleted?: (id: string) => void;
+}) {
+  const start = reminder ? localParts(Date.parse(reminder.at), timeZone) : nextHour(timeZone);
+  const has = (channel: string) => Boolean(reminder?.channels.some((c) => c.channel === channel));
   const key = useRef(crypto.randomUUID());
   const [today] = useState(() => ymdInZone(Date.now(), timeZone));
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
+  const [title, setTitle] = useState(reminder?.title ?? '');
+  const [notes, setNotes] = useState(reminder?.notes ?? '');
   const [date, setDate] = useState(start.date);
   const [time, setTime] = useState(start.time);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
-  const [popup, setPopup] = useState(true);
-  const [email, setEmail] = useState(true);
-  const [call, setCall] = useState(false);
+  const [popup, setPopup] = useState(reminder ? has('popup') : true);
+  const [email, setEmail] = useState(reminder ? has('email') : true);
+  const [call, setCall] = useState(reminder ? has('call') : false);
   const callSetup = useReminderCallSetup(call);
   const at = instant(date, time, timeZone);
   const chosen = popup || email || call;
   const callReady = !call || callSetup.verified;
+  // Editing keeps a past time as it is (to fix the wording); only a new time has to be in the future.
+  // The form works in whole minutes, so an unchanged date and time means the original (to the second) is kept.
+  const moved = !reminder || at !== Math.floor(Date.parse(reminder.at) / 60_000) * 60_000;
+  const [openedAt] = useState(() => Date.now());
+  const past = Boolean(reminder && !moved && Date.parse(reminder.at) <= openedAt);
 
   async function save() {
     if (at === null) { setError('That time doesn’t exist on this date. Choose another time.'); return; }
-    if (at <= Date.now()) { setError('Choose a time in the future.'); return; }
+    if (moved && at <= Date.now()) { setError('Choose a time in the future.'); return; }
     if (!chosen) { setError('Choose at least one way to be reminded.'); return; }
     if (!callReady) { setError('Verify your phone number so Nexdo can call you, or turn off Call.'); return; }
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, startAt: new Date(at).toISOString(), reminder: true, notifyPush: popup, notifyEmail: email, notifyCall: call, idempotencyKey: key.current }) });
+      const response = reminder
+        ? await fetch(`/api/reminders/${reminder.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, at: moved ? new Date(at).toISOString() : reminder.at, notifyPush: popup, notifyEmail: email, notifyCall: call }) })
+        : await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, startAt: new Date(at).toISOString(), reminder: true, notifyPush: popup, notifyEmail: email, notifyCall: call, idempotencyKey: key.current }) });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || 'Couldn’t save your reminder. Please try again.');
       onSaved(title.trim(), at);
@@ -89,13 +106,31 @@ export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string
     }
   }
 
-  return <Sheet id="reminder-sheet-title" title="New Reminder" busy={busy} canSave={title.trim().length > 0 && Boolean(date && time) && chosen && callReady} saveLabel={busy ? 'Saving…' : 'Save Reminder'} onClose={onClose} onSubmit={() => void save()}>
+  async function remove() {
+    if (!reminder) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/reminders/${reminder.id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Couldn’t delete this reminder. Please try again.');
+      onDeleted?.(reminder.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t delete this reminder. Please try again.');
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return <Sheet id="reminder-sheet-title" title={reminder ? 'Edit Reminder' : 'New Reminder'} busy={busy} canSave={title.trim().length > 0 && Boolean(date && time) && chosen && callReady} saveLabel={busy ? 'Saving…' : reminder ? 'Save Changes' : 'Save Reminder'} onClose={onClose} onSubmit={() => void save()}
+    footer={reminder ? (confirming
+      ? <><button type="button" className="nx-secondary" disabled={busy} onClick={() => setConfirming(false)}>Keep</button><button type="button" className="nx-primary nx-danger" disabled={busy} onClick={() => void remove()}>{busy ? 'Deleting…' : 'Delete reminder'}</button></>
+      : <button type="button" className="nx-secondary" aria-label="Delete reminder" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={18} aria-hidden="true" /></button>) : undefined}>
     <div className="nx-form-card">
       <div><label className="nx-label" htmlFor="reminder-title"><Bell size={15} aria-hidden="true" />REMIND ME TO</label>
         <input id="reminder-title" className="nx-field nx-title-field" maxLength={200} autoComplete="off" placeholder="Pick up the dry cleaning" value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} /></div>
       <hr />
       <div className="qa-two">
-        <div><label className="nx-label" htmlFor="reminder-date"><CalendarDays size={15} aria-hidden="true" />DATE</label><input id="reminder-date" type="date" className="nx-field" value={date} min={today} disabled={busy} onChange={(event) => setDate(event.target.value)} /></div>
+        <div><label className="nx-label" htmlFor="reminder-date"><CalendarDays size={15} aria-hidden="true" />DATE</label><input id="reminder-date" type="date" className="nx-field" value={date} min={reminder && date < today ? undefined : today} disabled={busy} onChange={(event) => setDate(event.target.value)} /></div>
         <div><label className="nx-label" htmlFor="reminder-time"><Clock size={15} aria-hidden="true" />TIME</label><input id="reminder-time" type="time" className="nx-field" value={time} disabled={busy} onChange={(event) => setTime(event.target.value)} /></div>
       </div>
       <hr />
@@ -111,10 +146,12 @@ export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string
         </div>
       </fieldset>
       {call && <CallSetup setup={callSetup} disabled={busy} />}
+      {past && <p className="nx-hint qa-past">This reminder’s time has passed. Choose a new date and time to be reminded again.</p>}
       <p className="nx-hint">{call
         ? 'At this time Nexdo calls you and reads the reminder and its notes. Press 1 on the call to hear it again, or 2 to mark it done.'
         : 'Nexdo notifies you at this time, the same way it does for reminders you set by voice.'}</p>
     </div>
+    {confirming && <p role="alert" className="nx-sheet-error">Delete this reminder? Any pop-up, email or call still scheduled for it is cancelled.</p>}
     {error && <p role="alert" className="nx-sheet-error">{error}</p>}
   </Sheet>;
 }

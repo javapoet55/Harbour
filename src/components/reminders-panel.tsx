@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
-import { Bell, CheckCircle2, Mail, Phone, Plus, Repeat, Search, XCircle } from 'lucide-react';
+import { Bell, CheckCircle2, Mail, Pencil, Phone, Plus, Repeat, Search, Trash2, XCircle } from 'lucide-react';
 import { standardContains } from '@/lib/task-query';
 
 export type ReminderChannel = 'popup' | 'email' | 'call';
@@ -29,9 +29,9 @@ const OUTCOME: Record<string, { label: string; tone: 'wait' | 'good' | 'bad' | '
 };
 
 /** The Reminders tab: upcoming reminders first, then the history, with how each pop-up, email and call went. */
-export function RemindersPanel({ reminders, loaded, error, timeZone, now, onRetry, onOpen, onNew }: {
+export function RemindersPanel({ reminders, loaded, error, timeZone, now, onRetry, onEdit, onDelete, onNew }: {
   reminders: ReminderItem[]; loaded: boolean; error: string; timeZone: string; now: number;
-  onRetry: () => void; onOpen: (id: string) => void; onNew: () => void;
+  onRetry: () => void; onEdit: (reminder: ReminderItem) => void; onDelete: (reminder: ReminderItem) => void; onNew: () => void;
 }) {
   const [search, setSearch] = useState('');
   const term = search.trim();
@@ -46,8 +46,8 @@ export function RemindersPanel({ reminders, loaded, error, timeZone, now, onRetr
   const when = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
   const empty = loaded && !upcoming.length && !history.length;
 
-  const row = (r: ReminderItem, past: boolean) => <li key={r.id}>
-    <button type="button" className={`tk-reminder${past ? ' is-past' : ''}`} onClick={() => onOpen(r.id)} aria-label={`${r.title}, ${when(r.at)}. Opens the reminder`}>
+  const row = (r: ReminderItem, past: boolean) => <li key={r.id} className={`tk-reminder-item${past ? ' is-past' : ''}`}>
+    <button type="button" className="tk-reminder" onClick={() => onEdit(r)} aria-label={`${r.title}, ${when(r.at)}. Edit the reminder`}>
       <span className="tk-reminder-icon" aria-hidden="true">{r.done ? <CheckCircle2 size={20} /> : <Bell size={20} />}</span>
       <span className="tk-reminder-main">
         <strong>{r.title}</strong>
@@ -60,6 +60,10 @@ export function RemindersPanel({ reminders, loaded, error, timeZone, now, onRetr
         return <span key={channel} className="tk-channel" data-tone={result.tone} title={`${label}: ${result.label}`}><Icon size={13} aria-hidden="true" />{label}<em>{result.label}</em></span>;
       })}</span>
     </button>
+    <span className="tk-reminder-actions">
+      <button type="button" aria-label={`Edit ${r.title}`} title="Edit" onClick={() => onEdit(r)}><Pencil size={17} aria-hidden="true" /></button>
+      <button type="button" aria-label={`Delete ${r.title}`} title="Delete" className="is-danger" onClick={() => onDelete(r)}><Trash2 size={17} aria-hidden="true" /></button>
+    </span>
   </li>;
 
   return <div role="tabpanel" aria-label="Reminders" className="tk-reminders">

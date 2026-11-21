@@ -10,6 +10,8 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && err.message === 'TASK_CHANGED') return NextResponse.json({ error: 'Your task changed. Refresh and try again.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_TASK_STATE') return NextResponse.json({ error: 'Restore this task before starting it.' }, { status: 409 });
   if (err instanceof ScheduleWarning) return NextResponse.json({ code: 'SCHEDULE_WARNING', error: err.message, warnings: err.warnings }, { status: 409 });
+  if (err instanceof Error && err.message === 'INVALID_REMINDER') return NextResponse.json({ error: 'Enter a reminder of up to 200 characters, notes of up to 4,000, and a valid time.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'REMINDER_TIME_PASSED') return NextResponse.json({ error: 'Choose a time in the future.' }, { status: 400 });
   if (err instanceof Error && err.message === 'REMINDER_NO_DELIVERY') return NextResponse.json({ error: 'Choose at least one way to be reminded: pop-up, email or call.' }, { status: 400 });
   if (err instanceof Error && err.message === 'REMINDER_CALL_PHONE_UNVERIFIED') return NextResponse.json({ code: 'REMINDER_CALL_PHONE_UNVERIFIED', error: 'Verify your phone number so Nexdo can call you with this reminder.' }, { status: 409 });
   if (err instanceof Error && err.message === 'REMINDER_CALLS_UNAVAILABLE') return NextResponse.json({ code: 'REMINDER_CALLS_UNAVAILABLE', error: 'Reminder calls aren’t available right now. Choose pop-up or email instead.' }, { status: 503 });
