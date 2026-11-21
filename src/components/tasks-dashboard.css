@@ -251,6 +251,27 @@
 .qa-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .qa-note-body { min-height: 220px; }
 
+/* Reminders tab: upcoming first, then history, with each channel's outcome. */
+.tk-reminder-group { margin-top: 14px; }
+.tk-reminder-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #1b2142; }
+.tk-reminder-group h3 span { min-width: 24px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; text-align: center; color: #5b45f0; background: #efedff; }
+.tk-reminder-group ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tk-reminder { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; text-align: left; border-radius: 16px; background: var(--tk-card); border: 1px solid var(--tk-line); transition: border-color .15s, box-shadow .15s; }
+.tk-reminder:hover { border-color: #c9c2fb; box-shadow: 0 6px 18px rgb(91 69 240 / .08); }
+.tk-reminder-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #8b5cf6, #5b45f0); }
+.tk-reminder.is-past .tk-reminder-icon { color: #5b45f0; background: #efedff; }
+.tk-reminder-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.tk-reminder-main strong { font-size: 16px; font-weight: 700; color: #1b2142; overflow-wrap: anywhere; }
+.tk-reminder-notes { font-size: 13px; color: #4b5273; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-reminder-when { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; color: #5b6386; }
+.tk-reminder-channels { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: none; max-width: 52%; }
+.tk-channel { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #3b3f6b; background: #f1f2f9; white-space: nowrap; }
+.tk-channel em { font-style: normal; font-weight: 700; }
+.tk-channel[data-tone="wait"] em { color: #5b45f0; }
+.tk-channel[data-tone="good"] { background: #eaf8ef; } .tk-channel[data-tone="good"] em { color: #15803d; }
+.tk-channel[data-tone="bad"] { background: #fdecec; } .tk-channel[data-tone="bad"] em { color: #b42318; }
+.tk-channel[data-tone="muted"] em { color: #6b7194; }
+
 /* Reminder delivery: pop-up, email and phone call. */
 .qa-delivery { border: 0; margin: 0; padding: 0; min-width: 0; }
 .qa-delivery legend { padding: 0; margin-bottom: 8px; }
@@ -321,6 +342,10 @@
   .tk-history-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .qa-two { grid-template-columns: 1fr; }
   .qa-delivery-options { grid-template-columns: 1fr; }
+  .tk-reminder { flex-wrap: wrap; }
+  .tk-reminder-main { flex: 1 1 calc(100% - 54px); }
+  .tk-reminder-channels { flex: 1 1 100%; min-width: 0; max-width: none; justify-content: flex-start; padding-left: 54px; }
+  .tk-tabs button svg { display: none; }
   .qa-delivery-option { flex-direction: row; align-items: center; gap: 10px; padding: 10px 44px 10px 12px; }
   .qa-delivery-check { top: 50%; transform: translateY(-50%); }
   .qa-call-row { flex-direction: column; }
