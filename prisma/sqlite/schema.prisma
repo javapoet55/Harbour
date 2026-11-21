@@ -9,6 +9,8 @@ datasource db {
 }
 
 model User {
+  notes Note[]
+  reminderCalls ReminderCall[]
   aiApiReceipts AiApiReceipt[]
   callerIdentity CallerIdentity?
   nutritionCallSettings NutritionCallSettings?
@@ -209,6 +211,7 @@ model Task {
   notifyPush           Boolean   @default(true)
   notifyEmail          Boolean   @default(true)
   notifySms            Boolean   @default(false)
+  notifyCall           Boolean   @default(false)
   critical             Boolean   @default(false)
   actualDurationMin    Int?
   startedAt            DateTime?
@@ -217,6 +220,7 @@ model Task {
 
   subtasks     Subtask[]
   reminders    Reminder[]
+  reminderCalls ReminderCall[]
   recurrence   RecurrenceRule?
   dependencies TaskDependency[]  @relation("TaskDepends")
   dependents   TaskDependency[]  @relation("TaskBlocks")
@@ -978,4 +982,40 @@ model QrOpen {
   city      String?
 
   @@index([openedAt, id])
+}
+
+model Note {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("")
+  body      String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  @@index([userId, deletedAt, updatedAt])
+}
+
+/// One phone call that reads a reminder aloud (Task.notifyCall). One row per reminder time and attempt.
+model ReminderCall {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// The reminder time this call is for; a moved reminder gets a new row.
+  fireAt        DateTime
+  attempt       Int       @default(1)
+  scheduledFor  DateTime
+  /// QUEUED, DIALING, IN_PROGRESS, COMPLETED, VOICEMAIL, MISSED, FAILED, CANCELLED, EXPIRED
+  status        String    @default("QUEUED")
+  twilioCallSid String?   @unique
+  error         String?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([taskId, fireAt, attempt])
+  @@index([status, scheduledFor])
 }

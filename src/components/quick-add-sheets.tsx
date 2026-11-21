@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlignLeft, Bell, CalendarDays, Clock, FileText, MapPin, Trash2 } from 'lucide-react';
+import { AlignLeft, Bell, BellRing, CalendarDays, Check, Clock, FileText, Mail, MapPin, Phone, Trash2 } from 'lucide-react';
 import { scheduleFetch } from '@/lib/schedule-fetch';
 import { zonedDateTime } from '@/lib/time';
 import { ymdInZone } from '@/lib/task-list';
@@ -63,15 +63,23 @@ export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string
   const [time, setTime] = useState(start.time);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [popup, setPopup] = useState(true);
+  const [email, setEmail] = useState(true);
+  const [call, setCall] = useState(false);
+  const callSetup = useReminderCallSetup(call);
   const at = instant(date, time, timeZone);
+  const chosen = popup || email || call;
+  const callReady = !call || callSetup.verified;
 
   async function save() {
     if (at === null) { setError('That time doesn’t exist on this date. Choose another time.'); return; }
     if (at <= Date.now()) { setError('Choose a time in the future.'); return; }
+    if (!chosen) { setError('Choose at least one way to be reminded.'); return; }
+    if (!callReady) { setError('Verify your phone number so Nexdo can call you, or turn off Call.'); return; }
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, startAt: new Date(at).toISOString(), reminder: true, idempotencyKey: key.current }) });
+      const response = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, startAt: new Date(at).toISOString(), reminder: true, notifyPush: popup, notifyEmail: email, notifyCall: call, idempotencyKey: key.current }) });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || 'Couldn’t save your reminder. Please try again.');
       onSaved(title.trim(), at);
@@ -81,7 +89,7 @@ export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string
     }
   }
 
-  return <Sheet id="reminder-sheet-title" title="New Reminder" busy={busy} canSave={title.trim().length > 0 && Boolean(date && time)} saveLabel={busy ? 'Saving…' : 'Save Reminder'} onClose={onClose} onSubmit={() => void save()}>
+  return <Sheet id="reminder-sheet-title" title="New Reminder" busy={busy} canSave={title.trim().length > 0 && Boolean(date && time) && chosen && callReady} saveLabel={busy ? 'Saving…' : 'Save Reminder'} onClose={onClose} onSubmit={() => void save()}>
     <div className="nx-form-card">
       <div><label className="nx-label" htmlFor="reminder-title"><Bell size={15} aria-hidden="true" />REMIND ME TO</label>
         <input id="reminder-title" className="nx-field nx-title-field" maxLength={200} autoComplete="off" placeholder="Pick up the dry cleaning" value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} /></div>
@@ -93,10 +101,130 @@ export function ReminderSheet({ timeZone, onClose, onSaved }: { timeZone: string
       <hr />
       <div><label className="nx-label" htmlFor="reminder-notes"><AlignLeft size={15} aria-hidden="true" />NOTES</label>
         <textarea id="reminder-notes" className="nx-field" rows={2} maxLength={4000} placeholder="Optional" value={notes} disabled={busy} onChange={(event) => setNotes(event.target.value)} /></div>
-      <p className="nx-hint">Nexdo notifies you at this time, the same way it does for reminders you set by voice.</p>
+      <hr />
+      <fieldset className="qa-delivery" disabled={busy}>
+        <legend className="nx-label"><BellRing size={15} aria-hidden="true" />REMIND ME BY</legend>
+        <div className="qa-delivery-options">
+          <DeliveryToggle icon={<Bell size={18} aria-hidden="true" />} label="Pop-up" detail="Browser notification" checked={popup} onChange={setPopup} />
+          <DeliveryToggle icon={<Mail size={18} aria-hidden="true" />} label="Email" detail="To your inbox" checked={email} onChange={setEmail} />
+          <DeliveryToggle icon={<Phone size={18} aria-hidden="true" />} label="Call" detail="Reads it aloud" checked={call} onChange={setCall} />
+        </div>
+      </fieldset>
+      {call && <CallSetup setup={callSetup} disabled={busy} />}
+      <p className="nx-hint">{call
+        ? 'At this time Nexdo calls you and reads the reminder and its notes. Press 1 on the call to hear it again, or 2 to mark it done.'
+        : 'Nexdo notifies you at this time, the same way it does for reminders you set by voice.'}</p>
     </div>
     {error && <p role="alert" className="nx-sheet-error">{error}</p>}
   </Sheet>;
+}
+
+function DeliveryToggle({ icon, label, detail, checked, onChange }: { icon: React.ReactNode; label: string; detail: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return <label className={`qa-delivery-option${checked ? ' is-on' : ''}`}>
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <span className="qa-delivery-icon">{icon}</span>
+    <span className="qa-delivery-text"><strong>{label}</strong><small>{detail}</small></span>
+    <span className="qa-delivery-check" aria-hidden="true">{checked && <Check size={14} />}</span>
+  </label>;
+}
+
+type CallSetupState = {
+  loading: boolean; available: boolean; verified: boolean; phone: string;
+  stage: 'phone' | 'code'; working: boolean; message: string; problem: string;
+  setPhone: (value: string) => void; sendCode: () => void; verify: (code: string) => void; change: () => void;
+};
+
+/** Mobile number as Nexdo expects it: international format with the formatting characters removed. */
+const cleanPhone = (value: string) => value.replace(/[\s().-]/g, '');
+/** +16505550123 → +1 650 555 0123; other numbers are shown as stored. */
+const showPhone = (value: string) => /^\+1\d{10}$/.test(value) ? `+1 ${value.slice(2, 5)} ${value.slice(5, 8)} ${value.slice(8)}` : value;
+
+/** Loads whether reminder calls can be placed and walks the person through verifying their number. */
+function useReminderCallSetup(active: boolean): CallSetupState {
+  const [loaded, setLoaded] = useState(false);
+  const [available, setAvailable] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [stage, setStage] = useState<'phone' | 'code'>('phone');
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState('');
+  const [problem, setProblem] = useState('');
+  useEffect(() => {
+    if (!active || loaded) return;
+    let cancelled = false;
+    void fetch('/api/reminder-calls', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((data) => {
+      if (cancelled) return;
+      setLoaded(true);
+      setAvailable(Boolean(data?.available));
+      setVerified(Boolean(data?.verified));
+      if (typeof data?.phone === 'string') setPhone(data.phone);
+      if (!data) setProblem('Couldn’t check your phone number. Please try again.');
+    }).catch(() => { if (!cancelled) { setLoaded(true); setProblem('Couldn’t check your phone number. Please try again.'); } });
+    return () => { cancelled = true; };
+  }, [active, loaded]);
+
+  async function phoneRequest(body: object) {
+    const response = await fetch('/api/nutrition/phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || 'Something went wrong. Please try again.');
+    return payload;
+  }
+  async function sendCode() {
+    const number = cleanPhone(phone);
+    if (!/^\+[1-9]\d{7,14}$/.test(number)) { setProblem('Enter your mobile number with its country code, for example +1 650 555 0123.'); return; }
+    setWorking(true); setProblem(''); setMessage('');
+    try {
+      const result = await phoneRequest({ action: 'start', phone: number });
+      if (result?.alreadyVerified) { setVerified(true); setPhone(number); return; }
+      setPhone(number);
+      setStage('code');
+      setMessage(`Nexdo is calling ${showPhone(number)} now and will read you a 6-digit code.`);
+    } catch (reason) { setProblem(reason instanceof Error ? reason.message : 'Couldn’t send the code.'); }
+    finally { setWorking(false); }
+  }
+  async function verify(code: string) {
+    if (!/^\d{6}$/.test(code)) { setProblem('Enter the 6-digit code from the call.'); return; }
+    setWorking(true); setProblem('');
+    try {
+      const result = await phoneRequest({ action: 'verify', code });
+      if (!result?.phoneVerified) throw new Error('That code didn’t work. Send a new code and try again.');
+      setVerified(true); setMessage('');
+    } catch (reason) { setProblem(reason instanceof Error ? reason.message : 'Couldn’t verify the code.'); }
+    finally { setWorking(false); }
+  }
+  return {
+    loading: active && !loaded, available, verified, phone, stage, working, message, problem,
+    setPhone, sendCode: () => void sendCode(), verify: (code) => void verify(code),
+    change: () => { setVerified(false); setStage('phone'); setMessage(''); setProblem(''); },
+  };
+}
+
+function CallSetup({ setup, disabled }: { setup: CallSetupState; disabled: boolean }) {
+  const [code, setCode] = useState('');
+  if (setup.loading) return <div className="qa-call" aria-live="polite"><p className="nx-hint">Checking your phone number…</p></div>;
+  if (!setup.available) return <div className="qa-call" role="alert"><p className="qa-call-problem">{setup.problem || 'Reminder calls aren’t available right now. Choose pop-up or email instead.'}</p></div>;
+  if (setup.verified) return <div className="qa-call is-verified" aria-live="polite">
+    <Phone size={16} aria-hidden="true" />
+    <p>Nexdo will call <strong>{showPhone(setup.phone)}</strong></p>
+    <button type="button" className="nx-pill-button" disabled={disabled} onClick={setup.change}>Change</button>
+  </div>;
+  const enter = (run: () => void) => (event: React.KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); run(); } };
+  return <div className="qa-call" aria-live="polite">
+    <p className="qa-call-title">Verify the number Nexdo should call</p>
+    {setup.stage === 'phone' ? <div className="qa-call-row">
+      <label className="sr-only" htmlFor="reminder-phone">Mobile number</label>
+      <input id="reminder-phone" type="tel" inputMode="tel" autoComplete="tel" className="nx-field" placeholder="+1 650 555 0123" value={setup.phone} disabled={disabled || setup.working}
+        onChange={(event) => setup.setPhone(event.target.value)} onKeyDown={enter(setup.sendCode)} />
+      <button type="button" className="nx-primary qa-call-button" disabled={disabled || setup.working || !setup.phone.trim()} onClick={setup.sendCode}>{setup.working ? 'Calling…' : 'Call me with a code'}</button>
+    </div> : <div className="qa-call-row">
+      <label className="sr-only" htmlFor="reminder-code">6-digit code</label>
+      <input id="reminder-code" className="nx-field" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit code" value={code} disabled={disabled || setup.working}
+        onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} onKeyDown={enter(() => setup.verify(code))} />
+      <button type="button" className="nx-primary qa-call-button" disabled={disabled || setup.working || code.length !== 6} onClick={() => setup.verify(code)}>{setup.working ? 'Checking…' : 'Verify'}</button>
+    </div>}
+    {setup.message && <p className="nx-hint">{setup.message} <button type="button" className="qa-link" disabled={setup.working} onClick={setup.change}>Use a different number</button></p>}
+    {setup.problem && <p className="qa-call-problem" role="alert">{setup.problem}</p>}
+  </div>;
 }
 
 /** Quick Add → Event: a calendar event, saved and sent to a connected calendar like events made on the Calendar page. */
