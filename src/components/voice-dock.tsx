@@ -97,6 +97,7 @@ export function VoiceDock() {
   const [audioPlaying, setAudioPlaying] = useState(false);
   const dockRef = useRef<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [summoned, setSummoned] = useState(false);
   const [mobileView, setMobileView] = useState(false);
   const [question, setQuestion] = useState('');
   const [history, setHistory] = useState<Array<{ question: string; answer: string; visual?: Turn['visual'] }>>([]);
@@ -105,6 +106,8 @@ export function VoiceDock() {
   useEffect(() => {
     const open = (event: Event) => {
       setSheetOpen(true);
+      setSummoned(true);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
       const detail = (event as CustomEvent<{ prompt?: string; contextActionId?: string }>).detail;
       if (detail?.prompt) { contextActionRef.current = detail.contextActionId; void submitRef.current?.(detail.prompt); }
     };
@@ -113,6 +116,7 @@ export function VoiceDock() {
   }, []);
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
+    setSummoned(false);
     turnRequestRef.current++;
     speechRequestRef.current?.abort();
     recRef.current?.abort();
@@ -274,13 +278,19 @@ export function VoiceDock() {
     recRef.current.start();
   }
 
+  // My Day has its own Ask Nexdo bar at the top of the page, so on a desktop this dock stays out of the
+  // way there until a question has been asked, and can be closed again afterwards.
+  const onMyDay = pathname === '/' && !mobileView;
+  const quiet = onMyDay && !summoned && state === 'idle' && !turn && !error && !text.trim();
+
   return (
     <>
     {sheetOpen && mobileView && <div className="voice-sheet-backdrop" onClick={closeSheet} />}
-    <section ref={dockRef} className={cn('harbor-voice-dock fixed inset-x-3 z-40 md:bottom-6 md:left-[272px] md:right-6', sheetOpen && mobileView && 'voice-sheet-open')} role={sheetOpen && mobileView ? 'dialog' : undefined} aria-modal={sheetOpen && mobileView ? true : undefined} aria-label={sheetOpen && mobileView ? 'Ask Nexdo' : 'Voice assistant'}>
+    <section ref={dockRef} className={cn('harbor-voice-dock fixed inset-x-3 z-40 md:bottom-6 md:left-[272px] md:right-6', sheetOpen && mobileView && 'voice-sheet-open', quiet && 'voice-quiet')} role={sheetOpen && mobileView ? 'dialog' : undefined} aria-modal={sheetOpen && mobileView ? true : undefined} aria-label={sheetOpen && mobileView ? 'Ask Nexdo' : 'Voice assistant'}>
       <div className="voice-card harbor-card mx-auto max-w-3xl p-2 shadow-lg sm:p-3">
         <div className="mobile-voice-launcher md:hidden"><button ref={openerRef} onClick={() => setSheetOpen(true)}>{pathname === '/calendar' ? 'Ask Nexdo about my schedule…' : 'Ask Nexdo…'}</button>{SHOW_MIC && <button aria-label="Ask Nexdo by voice" className="mobile-voice-mic" onClick={listen}><Mic size={24} /></button>}</div>
         <header className="voice-sheet-header"><span className="voice-sheet-handle" /><h2>Ask Nexdo</h2><button aria-label="Close Ask Nexdo" onClick={closeSheet}><X size={23} /></button></header>
+        {onMyDay && !quiet && <div className="voice-dismiss"><span>Ask Nexdo</span><button type="button" aria-label="Close Ask Nexdo" onClick={() => { closeSheet(); setError(''); setText(''); }}><X size={18} aria-hidden="true" /></button></div>}
         <div className="voice-composer flex items-center gap-2">
           {SHOW_MIC && <button
             type="button"

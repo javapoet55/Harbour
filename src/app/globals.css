@@ -403,3 +403,32 @@ body { background:radial-gradient(ellipse at 0 0,#dff6ff,transparent 48%),radial
   .inbox-page :is(.task-list-heading button,.task-empty button,.task-empty svg) { color:#c4b5ff; }
   .inbox-page .task-row-details:hover { background:#322b47; }
 }
+
+/* My Day (desktop) has its own Ask Nexdo bar, so the dock hides there until a question is asked. */
+.voice-dismiss { display:none; }
+@media (min-width:768px) {
+  .harbor-voice-dock.voice-quiet { display:none; }
+  .voice-dismiss { display:flex; align-items:center; justify-content:space-between; margin:0 4px 8px; font-size:14px; font-weight:600; color:var(--muted); }
+  .voice-dismiss button { display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:#f1edff; color:var(--brand); }
+}
+
+/* Side menu: account, filled active item and the Nexdo AI card. */
+@media (min-width:768px) { .harbor-side { position:sticky; top:0; height:100vh; display:flex; flex-direction:column; overflow-y:auto; } }
+.side-user { display:flex; align-items:center; gap:12px; margin-top:14px; }
+.side-avatar { display:grid; place-items:center; width:40px; height:40px; flex:0 0 40px; border-radius:50%; color:#fff; font-size:14px; font-weight:700; background:linear-gradient(135deg,#7c5cff,#4f39f6); }
+.side-user p { font-size:15px; font-weight:700; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.side-user small { display:block; font-size:13px; color:var(--muted); }
+.side-nav { display:flex; flex-direction:column; gap:4px; margin-top:22px; }
+.side-link { display:flex; align-items:center; gap:14px; min-height:42px; padding:0 14px; border-radius:12px; font-size:15px; font-weight:500; color:#27304f; }
+.side-link:hover { background:#f1edff; }
+.side-link.is-active { color:#fff; background:linear-gradient(90deg,#6d4df7,#5b45f0); box-shadow:0 6px 16px #5b45f040; }
+.side-signout { display:flex; align-items:center; gap:10px; min-height:40px; margin-top:10px; padding:0 14px; border-radius:12px; font-size:14px; font-weight:500; color:var(--muted); text-align:left; }
+.side-signout:hover { background:#f1edff; color:var(--ink); }
+.side-ai { position:relative; display:block; width:100%; margin-top:auto; padding:74px 16px 16px; overflow:hidden; text-align:left; border-radius:18px; border:1px solid #e3dcfb; background:#f4f0ff url('/my-day/sunrise-mountains.webp') center top / 100% auto no-repeat; box-shadow:0 8px 22px #5646be14; }
+.side-ai::before { content:''; position:absolute; inset:0; background:linear-gradient(180deg,#ffffff00 20%,#f6f2ffee 58%,#f6f2ff 100%); }
+.side-ai > * { position:relative; z-index:1; }
+.side-ai svg { position:absolute; top:14px; left:14px; color:#8b5cf6; }
+.side-ai strong { display:block; font-size:17px; font-weight:700; color:#1b1464; }
+.side-ai span { display:block; margin-top:2px; font-size:13px; line-height:1.35; color:var(--muted); }
+.side-ai:hover { border-color:#c9bdf8; }
+.side-nav + .side-signout { margin-bottom:18px; }

@@ -60,6 +60,12 @@ export function CalendarScreen() {
     window.addEventListener('harbor:calendar-add', open);
     return () => window.removeEventListener('harbor:calendar-add', open);
   }, [selected, today]);
+  // My Day's "Schedule an event" arrives as /calendar?add=1: open the add form once, then clear the flag.
+  useEffect(() => {
+    if (!today || new URLSearchParams(window.location.search).get('add') !== '1') return;
+    window.history.replaceState(null, '', '/calendar');
+    window.dispatchEvent(new Event('harbor:calendar-add'));
+  }, [today]);
 
   const refresh = async () => { setRevision((n) => n + 1); };
   const filtered = (items: CalendarItem[]) => items.filter((item) => (kind === 'all' || item.kind === kind) && (!criticalOnly || item.critical));
