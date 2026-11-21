@@ -75,3 +75,9 @@ See [security-pentest-brief.md](security-pentest-brief.md) for the scope to hand
 - **Trade-off:** someone who knows a customer's email can use up that account's 10 attempts and make real sign-ins wait up to 15 minutes. That is the usual price of an account limit; the alternative (no limit) lets passwords be guessed without end.
 - **If the limiter cannot run** (`SIGNUP_ABUSE_SECRET` missing, the database unavailable, no readable address) sign-in is not blocked, because that would lock every customer out. It logs `login_rate_limiter_unavailable` at error level: alert on it. Both variables are set on Develop; confirm them on Stage and Production before promoting.
 - Limits are `LOGIN_LIMITS` in `abuse.ts`. Not covered: Sign in with Apple (token based), the admin app (email code, its own limits), and change-password (needs a live session).
+
+## Prisma's `deepmerge-ts` and `effect` advisories (fixed without Prisma 7)
+
+`npm audit` flagged `deepmerge-ts` (< 8.0.0) and `effect` (<= 3.22.0), reached through `prisma > @prisma/config`, which showed up as four high findings (those two, `@prisma/config` and `prisma`). The root `package.json` now has `overrides` forcing `effect` 3.22.5 and `deepmerge-ts` 8.0.2, so the Prisma 6.19.3 command line stays and the audit is clean. The two entries were removed from `.github/audit-accepted.json`.
+
+`@prisma/config` only calls `deepmerge-ts` (`deepmerge`) and `effect` while reading a `prisma.config.ts`; this project configures Prisma in `package.json#prisma`, so the build does not reach that code, and a direct load of a `prisma.config.ts` through `@prisma/config` works with both overrides. Remove the overrides when Prisma 7 is adopted (its own dependencies are patched). If a future Prisma 6 release pins an incompatible range, `npm install` will say so.
