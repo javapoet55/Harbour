@@ -6,7 +6,7 @@
     "@config-plugins/react-native-webrtc": "^15.0.2",
     "@expo/vector-icons": "^15.0.2",
     "@hookform/resolvers": "^5.9.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-async-storage/async-storage": "3.1.1",
     "@react-native-firebase/analytics": "^26.4.0",
     "@react-native-firebase/app": "^26.4.0",
     "@react-native-firebase/crashlytics": "^26.4.0",
