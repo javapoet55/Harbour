@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from './db';
-import { writeSession, readUserId } from './session';
+import { writeSession, readSession } from './session';
 import { POST } from '@/app/api/assistant/route';
 import { POST as speech } from '@/app/api/speech/route';
 import { PATCH } from '@/app/api/tasks/[id]/route';
@@ -178,7 +178,7 @@ describe('full authenticated API → real SQLite → engines → real provider a
     expect((await ask('What should I focus on today?')).status).toBe(401);
     vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('HARBOR_SESSION_SECRET', '');
     await expect(writeSession(userId)).rejects.toThrow('SESSION_CONFIGURATION_REQUIRED');
-    expect(await readUserId()).toBeNull();
+    expect(await readSession()).toBeNull();
     vi.stubEnv('HARBOR_SESSION_SECRET', 'c'.repeat(64)); await writeSession(userId);
     expect(jar.get('harbor_session')?.secure).toBe(true);
     vi.stubEnv('SENDGRID_API_KEY', ''); vi.stubEnv('TWILIO_ACCOUNT_SID', ''); vi.stubEnv('VAPID_PUBLIC_KEY', '');

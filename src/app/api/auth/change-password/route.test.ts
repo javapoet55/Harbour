@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/server/auth', () => ({ requireUser: vi.fn() }));
 vi.mock('@/server/session', () => ({ clearSession: vi.fn() }));
+vi.mock('@/server/session-store', () => ({ revokeAllSessions: vi.fn() }));
 vi.mock('@/server/db', () => ({ prisma: { user: { updateMany: vi.fn() } } }));
 vi.mock('@/server/account-auth', () => ({ validatePassword: (value: string) => { if (Buffer.byteLength(value) > 72) throw new Error('PASSWORD_POLICY'); } }));
 import bcrypt from 'bcryptjs';
 import { requireUser } from '@/server/auth';
 import { clearSession } from '@/server/session';
+import { revokeAllSessions } from '@/server/session-store';
 import { prisma } from '@/server/db';
 import { POST } from './route';
 const oldPassword = 'old-password-123';
@@ -41,11 +43,14 @@ describe('change password', () => {
     expect(await bcrypt.compare(newPassword, hash)).toBe(true);
     expect(await bcrypt.compare(oldPassword, hash)).toBe(false);
     expect(clearSession).toHaveBeenCalledOnce();
+    // Every other browser and phone is signed out too, not only this one.
+    expect(revokeAllSessions).toHaveBeenCalledWith('owner');
   });
   it('does not overwrite a concurrent password change', async () => {
     vi.mocked(prisma.user.updateMany).mockResolvedValue({ count: 0 });
     expect((await request({ currentPassword: oldPassword, newPassword, confirmPassword: newPassword })).status).toBe(409);
     expect(clearSession).not.toHaveBeenCalled();
+    expect(revokeAllSessions).not.toHaveBeenCalled();
   });
   it('does not change a provider-only account or sign it out', async () => {
     vi.mocked(requireUser).mockResolvedValue({ id: 'owner', passwordHash: '' } as Awaited<ReturnType<typeof requireUser>>);

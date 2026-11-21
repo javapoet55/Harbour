@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import './zod-csp';
 import {estimateVoiceCost} from './voice-costs';
 const count = z.number().int().min(0).max(100_000_000);
 export const voiceTokenReceipt = z.object({

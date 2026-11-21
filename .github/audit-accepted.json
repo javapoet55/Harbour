@@ -1,0 +1,20 @@
+[
+  {
+    "advisory": "GHSA-ggr8-5vv4-36mx",
+    "package": "deepmerge-ts (via prisma > @prisma/config)",
+    "reason": "Only the Prisma command-line tool uses it, to read this project's own configuration during build and migration. It never handles user input in the running app. The fix needs Prisma 7, a major upgrade.",
+    "reviewBy": "2027-02-28"
+  },
+  {
+    "advisory": "GHSA-7589-6fvf-x4pw",
+    "package": "effect (via prisma > @prisma/config)",
+    "reason": "Only the Prisma command-line tool uses it, to read this project's own configuration during build and migration. It never handles user input in the running app. The fix needs Prisma 7, a major upgrade.",
+    "reviewBy": "2027-02-28"
+  },
+  {
+    "advisory": "GHSA-qr28-fpjm-wq7f",
+    "package": "decode-uri-component (mobile, via expo-router 57 > query-string 7)",
+    "reason": "Not reachable from outside the app: Expo Router parses incoming links with its own parser, which never calls this decoder (mobile/src/lib/deepLinkDecoder.test.ts fails if that changes). The only fixed release is an ES module that query-string 7 cannot load. Expo SDK 58 removes query-string 7; drop this entry with that upgrade.",
+    "reviewBy": "2027-02-28"
+  }
+]

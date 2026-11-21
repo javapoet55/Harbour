@@ -1,0 +1,33 @@
+# Fails when a dependency of the web app, the admin app or the phone app that ships to production has a
+# known high or critical vulnerability.
+# Runs on every pull request and push to the three deploy branches, and weekly so a newly published
+# advisory is noticed even when nobody is pushing.
+name: Dependency audit
+
+on:
+  pull_request:
+  push:
+    branches: [develop, stage, main]
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ['.', admin, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Reads the lockfile only: nothing is installed and no package script runs.
+      # Advisories judged not to affect the running app are listed, with reasons, in .github/audit-accepted.json.
+      - name: Audit production dependencies (${{ matrix.package }})
+        run: node scripts/audit-production.mjs ${{ matrix.package }}

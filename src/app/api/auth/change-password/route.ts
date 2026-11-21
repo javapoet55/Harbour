@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { clearSession } from '@/server/session';
+import { revokeAllSessions } from '@/server/session-store';
 import { validatePassword } from '@/server/account-auth';
 import { healthRoute } from '@/server/health/telemetry';
 import { jsonError } from '@/lib/http';
@@ -25,6 +26,8 @@ async function changePassword(req: Request) {
     const passwordHash = await bcrypt.hash(newPassword, 12);
     const changed = await prisma.user.updateMany({ where: { id: user.id, deletedAt: null, passwordHash: user.passwordHash }, data: { passwordHash } });
     if (changed.count !== 1) return NextResponse.json({ error: 'Your password changed during this request. Sign in again and retry.' }, { status: 409 });
+    // A changed password signs out every device, not only this one: whoever knew the old password is out.
+    await revokeAllSessions(user.id);
     await clearSession();
     return NextResponse.json({ ok: true });
   } catch (error) { return jsonError(error); }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import './zod-csp';
 export const activeFocusSchema = z.object({ taskId: z.string(), startedAt: z.number().finite(), endsAt: z.number().finite() });
 export type FocusSessionState = { taskId: string; title: string; remainingSeconds: number; endsAt: number | null; workSessionId?: string | null; focusToken?: string };
 export function focusSecondsRemaining(session: FocusSessionState, now = Date.now()) {

@@ -29,10 +29,10 @@ export function AdminShell({ children, name, email }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [signOutError, setSignOutError] = useState('');
-  async function signOut() {
+  async function signOut(everywhere = false) {
     setSignOutError('');
     try {
-      const response = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }) });
+      const response = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: everywhere ? 'logout-everywhere' : 'logout' }) });
       if (!response.ok) throw new Error('Sign-out failed');
       router.replace('/login');
       router.refresh();
@@ -66,7 +66,8 @@ export function AdminShell({ children, name, email }: { children: React.ReactNod
           <div><strong>{name}</strong><small>{email}</small></div>
         </div>
         {signOutError && <p role="alert">{signOutError}</p>}
-        <button className="admin-signout" onClick={signOut}><LogOut size={18} /> Sign out</button>
+        <button className="admin-signout" onClick={() => void signOut()}><LogOut size={18} /> Sign out</button>
+        <button className="admin-signout" title="Ends your admin sessions on every browser, including this one" onClick={() => void signOut(true)}><LogOut size={18} /> Sign out everywhere</button>
       </aside>
       <main className="admin-main">{children}</main>
     </div>

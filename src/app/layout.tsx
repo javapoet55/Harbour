@@ -1,4 +1,5 @@
 import Script from 'next/script';
+import { headers } from 'next/headers';
 import { SupportChat } from '@/components/support-chat';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
@@ -23,12 +24,15 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // The per-request nonce from the middleware's Content Security Policy. Reading it renders every page per
+  // request, which a nonce requires: a prebuilt page would carry scripts the policy then blocks.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
       {/* Extensions such as ClickUp add body attributes before React hydrates.
           Suppress only this element's mismatch; child hydration checks stay active. */}
-      <body className="min-h-full antialiased" suppressHydrationWarning>{children}<SupportChat /><Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
+      <body className="min-h-full antialiased" suppressHydrationWarning>{children}<SupportChat /><Script src="/firebase-bridge.js" strategy="afterInteractive" nonce={nonce} /></body>
     </html>
   );
 }

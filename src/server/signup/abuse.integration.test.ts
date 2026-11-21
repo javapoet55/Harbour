@@ -4,7 +4,7 @@ import { consumeLimit, limitCodeSend, securityRef, securityEvent } from './abuse
 import { recordPromotionEligibility } from './promotion';
 import { signupProof, registerAccount, sendEmailVerification, verifyEmail, requestEmailVerification } from '@/server/account-auth';
 const session = vi.hoisted(() => ({ id: '' }));
-vi.mock('@/server/session', () => ({ readUserId: async () => session.id || null, writeSession: vi.fn() }));
+vi.mock('@/server/session', () => ({ readSession: async () => session.id ? { userId: session.id, sessionId: null, issuedAt: new Date() } : null, writeSession: vi.fn() }));
 vi.mock('./email-risk', async original => ({ ...await original<typeof import('./email-risk')>(), checkEmail: async (email: string) => ({ normalizedEmail: email, decision: 'ALLOW', reasonCodes: [] }) }));
 import { requireUser } from '@/server/auth';
 import { POST as accountExistsPOST } from '@/app/api/auth/account-exists/route';
