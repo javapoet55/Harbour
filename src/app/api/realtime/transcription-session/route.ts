@@ -1,4 +1,5 @@
 import { voiceAllowanceResponse } from '@/server/voice/usage';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { voiceAudioInput } from '@/server/voice/audio-input';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
@@ -23,6 +24,7 @@ async function healthHandlerPOST(req: Request) {
     const model = 'gpt-4o-transcribe';
     const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
     if (allowance) return allowance;
+    await takeAiQuota(user, 'live_transcription');
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -32,12 +34,12 @@ async function healthHandlerPOST(req: Request) {
         session,
       }),
     });
-    if (!response.ok) return Response.json({ error: 'Couldn’t connect to live transcription. Please try again later.' }, { status: 502, headers });
+    if (!response.ok) { await refundAiQuota(user, 'live_transcription'); return Response.json({ error: 'Couldn’t connect to live transcription. Please try again later.' }, { status: 502, headers }); }
     const result = await response.json();
     if (typeof result.value !== 'string' || typeof result.expires_at !== 'number') throw new Error('Invalid session');
     return Response.json({ value: result.value, expiresAt: result.expires_at, model }, { headers });
   } catch (error) {
-    if (error instanceof Error && error.message === 'UNAUTHENTICATED') return jsonError(error);
+    if (error instanceof Error && ['UNAUTHENTICATED', 'AI_DAILY_LIMIT_REACHED', 'AI_QUOTA_UNAVAILABLE'].includes(error.message)) return jsonError(error);
     return Response.json({ error: 'Voice connection unavailable. Please try again later.' }, { status: 502, headers });
   }
 }

@@ -1,0 +1,37 @@
+/* Important Moments on the web. Builds on the Tasks (tasks-screen.css) and Shopping (shopping.css) styles. */
+.mo-section { margin-top: 22px; font-size: 13px; font-weight: 700; letter-spacing: .8px; color: #3d29c7; }
+.mo-muted { font-size: 14px; color: #575c80; }
+.mo-card > svg:first-child { color: #3d29f0; }
+.mo-email { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; font-size: 14px; color: #575c80; background: rgb(61 41 240 / .06); }
+.mo-email.is-ready { color: #1d6b3a; background: #effaf2; }
+.mo-email > svg { flex: 0 0 auto; }
+.mo-filters { display: flex; gap: 10px; align-items: flex-start; }
+.mo-filters .nx-search { flex: 1; min-width: 0; }
+.mo-filter { width: auto; min-width: 150px; margin-top: 16px; min-height: 50px; }
+.mo-summary { display: grid; gap: 8px; justify-items: start; }
+.mo-summary p { font-size: 15px; }
+.mo-badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #3d29c7; background: rgb(61 41 240 / .08); }
+.mo-state { font-size: 13px; font-weight: 600; color: #575c80; }
+.mo-state.is-scheduled, .mo-state.is-ready { color: #1d6b3a; }
+.mo-state.is-failed { color: #a12825; }
+.mo-state.is-needs-wish { color: #8a5a00; }
+.mo-count { margin-top: 6px; text-align: right; font-size: 12px; color: #575c80; }
+.mo-count.is-over { color: #a12825; font-weight: 600; }
+.mo-actions { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.mo-actions > button { flex: 1; min-width: 160px; min-height: 50px; }
+.mo-approve { min-height: 50px; font-size: 16px; }
+.mo-schedule { width: 100%; margin-top: 12px; }
+.mo-wish-locked { padding: 14px; border-radius: 16px; background: #fff; border: 1px solid #d8d6e6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mo-wish-locked small { display: block; margin-top: 10px; color: #575c80; }
+.mo-plans { display: grid; gap: 10px; margin: 10px 0 0; padding: 0; list-style: none; }
+.mo-plan { display: grid; gap: 10px; padding: 14px; border-radius: 16px; background: #fff; border: 1px solid #d8d6e6; }
+.mo-plan strong { display: block; font-size: 15px; }
+.mo-plan small { display: block; margin-top: 3px; font-size: 13px; color: #575c80; overflow-wrap: anywhere; }
+.mo-plan small.mo-plan-error { color: #a12825; }
+.mo-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mo-plan-actions button { min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #3d29c7; background: #fff; border: 1px solid #d8d6e6; }
+.mo-plan-actions button:disabled { opacity: .55; }
+.mo-plan-actions .mo-danger { color: #a12825; border-color: #f3cfcc; }
+.mo-blocker { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; padding: 14px; border-radius: 14px; font-size: 14px; color: #575c80; background: rgb(61 41 240 / .06); }
+.mo-blocker > svg { flex: 0 0 auto; margin-top: 2px; }
+@media (max-width: 520px) { .mo-filters { flex-direction: column; gap: 0; } .mo-filter { width: 100%; margin-top: 10px; } }

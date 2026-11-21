@@ -35,10 +35,35 @@ async function morningTick() {
   } catch { console.error('Morning summary tick failed; checking again next cycle'); }
   finally { morningRunning = false; }
 }
+// Independent timer for task reminders: pop-up and email notices, then phone calls that read the reminder aloud.
+// Each endpoint runs on its own so a slow email provider cannot hold up a call that is due this minute.
+let reminderRunning = false;
+const reminderTicks = [
+  ['Reminder tick', '/api/notifications', JSON.stringify({ action: 'tick' })],
+  ['Reminder call tick', '/api/reminder-calls/tick', undefined],
+];
+async function reminderTick() {
+  if (reminderRunning || stopping) return;
+  reminderRunning = true;
+  try {
+    await Promise.all(reminderTicks.map(async ([name, path, body]) => {
+      try {
+        const response = await fetch(new URL(path, base), {
+          method: 'POST', redirect: 'error', signal: AbortSignal.timeout(55000), body,
+          headers: { Authorization: `Bearer ${secret}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        });
+        console.log(`${name}: HTTP ${response.status}`);
+        await response.body?.cancel();
+      } catch { console.error(`${name} failed; checking again next cycle`); }
+    }));
+  } finally { reminderRunning = false; }
+}
 let stopping = false;
 const morningTimer = setInterval(() => { void morningTick(); }, 60000);
 void morningTick();
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopping = true; clearInterval(morningTimer); void calendarTimer?.stop(); });
+const reminderTimer = setInterval(() => { void reminderTick(); }, 60000);
+void reminderTick();
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopping = true; clearInterval(morningTimer); clearInterval(reminderTimer); void calendarTimer?.stop(); });
 while (!stopping) {
   const started = Date.now();
   try {

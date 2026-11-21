@@ -3,7 +3,8 @@
 import { FormEvent, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { NexdoLogo } from '@/components/nexdo-logo';
+import { KeyRound, Mail } from 'lucide-react';
+import { AuthAlert, AuthButton, AuthField, AuthShell } from '@/components/auth/auth-ui';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -74,35 +75,35 @@ function VerifyEmailForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5">
-      <Link href="/welcome" className="nexdo-login-brand"><NexdoLogo priority /></Link>
-      <h1 className="mt-2 text-3xl font-semibold">Verify your email</h1>
-      <p className="mt-2 text-[var(--muted)]">Enter the six-digit code sent to your inbox.</p>
-      <form onSubmit={submit} className="harbor-card mt-6 space-y-3 p-5">
-        <label className="block text-sm font-medium">
-          Email address
-          <input className="harbor-input mt-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-        </label>
-        <label className="block text-sm font-medium">
-          Verification code
-          <input className="harbor-input mt-1" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
-        </label>
-        {message && <p className="text-sm text-[var(--ok)]" role="status">{message}</p>}
-        {error && <p className="text-sm text-[var(--danger)]" role="alert">{error}</p>}
-        <button className="harbor-btn harbor-btn-brand w-full" disabled={busy}>{busy ? 'Working…' : 'Verify email'}</button>
-        <button type="button" className="w-full text-sm font-medium text-[var(--brand)] disabled:text-[var(--muted)]" disabled={busy || cooldown > 0 || !email} onClick={() => void resend()}>
-          {cooldown > 0 ? `Send a new code in ${cooldown}s` : 'Send a new code'}
-        </button>
+    <>
+      <h2>Enter your code</h2>
+      <p className="au-panel-lede">It’s the six-digit code in the email we sent you.</p>
+      <form onSubmit={submit} className="au-form">
+        <AuthField label="Email address" icon={Mail} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
+        <AuthField label="Verification code" icon={KeyRound} code inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" />
+        {message && <AuthAlert kind="ok">{message}</AuthAlert>}
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <AuthButton type="submit" disabled={busy}>{busy ? 'Working…' : 'Verify email'}</AuthButton>
       </form>
-      <p className="mt-4 text-center text-sm text-[var(--muted)]"><Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Back to sign in</Link> · <Link href="/reset-password">Reset password</Link></p>
-    </main>
+      <div className="au-foot">
+        <p className="au-note">Didn’t get it? <button type="button" className="au-link" disabled={busy || cooldown > 0 || !email} onClick={() => void resend()}>{cooldown > 0 ? `Send a new code in ${cooldown}s` : 'Send a new code'}</button></p>
+        <p className="au-note"><Link className="au-link" href="/login">Back to login</Link> · <Link className="au-link" href="/reset-password">Reset password</Link></p>
+      </div>
+    </>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5"><p>Loading…</p></main>}>
-      <VerifyEmailForm />
-    </Suspense>
+    <AuthShell
+      scene="reset"
+      aside={<>
+        <h1>Verify your <span>email</span></h1>
+        <p className="au-lede">One quick step so we know it’s really you. Then your day is ready.</p>
+      </>}
+    >
+      {/* useSearchParams needs a Suspense boundary. */}
+      <Suspense fallback={<h2>Enter your code</h2>}><VerifyEmailForm /></Suspense>
+    </AuthShell>
   );
 }

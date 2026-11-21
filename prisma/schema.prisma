@@ -9,6 +9,9 @@ datasource db {
 }
 
 model User {
+  aiDailyUsage AiDailyUsage[]
+  notes Note[]
+  reminderCalls ReminderCall[]
   aiApiReceipts AiApiReceipt[]
   callerIdentity CallerIdentity?
   nutritionCallSettings NutritionCallSettings?
@@ -28,6 +31,9 @@ model User {
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
   emailVerifiedAt DateTime?
+  // Cookies signed before this moment are refused ("sign out everywhere", password change or reset).
+  sessionsRevokedAt DateTime?
+  sessions UserSession[]
 
   moments ImportantMoment[]
   momentEmailAccount MomentEmailAccount?
@@ -49,6 +55,18 @@ model User {
   authIdentities     AuthIdentity[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+}
+
+// One row per signed-in browser or app. The session cookie carries this id; deleting the row signs that device out.
+model UserSession {
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Feedback {
@@ -164,6 +182,19 @@ model Project {
   @@index([userId, deletedAt, updatedAt])
 }
 
+/// Free-form text a person keeps alongside their tasks (web Quick Add → Note).
+model Note {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("")
+  body      String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  @@index([userId, deletedAt, updatedAt])
+}
+
 model Category {
   id        String   @id @default(cuid())
   userId    String
@@ -223,6 +254,8 @@ model Task {
   notifyPush           Boolean   @default(true)
   notifyEmail          Boolean   @default(true)
   notifySms            Boolean   @default(false)
+  /// Phone-call delivery: Nexdo calls the user's verified number at reminderAt and reads the reminder.
+  notifyCall           Boolean   @default(false)
   critical             Boolean   @default(false)
   actualDurationMin    Int?
   startedAt            DateTime?
@@ -231,6 +264,7 @@ model Task {
 
   subtasks     Subtask[]
   reminders    Reminder[]
+  reminderCalls ReminderCall[]
   recurrence   RecurrenceRule?
   dependencies TaskDependency[]  @relation("TaskDepends")
   dependents   TaskDependency[]  @relation("TaskBlocks")
@@ -608,6 +642,8 @@ model AdminLoginToken {
   createdAt DateTime @default(now())
   sessionHash String? @unique
   sessionExpiresAt DateTime?
+  // Last admin request on this session; an idle session ends before its 8-hour limit.
+  sessionLastUsedAt DateTime?
   @@index([userId, createdAt])
 }
 
@@ -978,4 +1014,41 @@ model QrOpen {
   city      String?
 
   @@index([openedAt, id])
+}
+
+/// One phone call that reads a reminder aloud (Task.notifyCall). One row per reminder time and attempt.
+model ReminderCall {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// The reminder time this call is for; a moved reminder gets a new row.
+  fireAt        DateTime
+  attempt       Int       @default(1)
+  scheduledFor  DateTime
+  /// QUEUED, DIALING, IN_PROGRESS, COMPLETED, VOICEMAIL, MISSED, FAILED, CANCELLED, EXPIRED
+  status        String    @default("QUEUED")
+  twilioCallSid String?   @unique
+  error         String?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([taskId, fireAt, attempt])
+  @@index([status, scheduledFor])
+}
+
+/// Per-user daily use of each AI feature (the account's local day), shared by every server instance.
+model AiDailyUsage {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature   String
+  day       String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, feature, day])
+  @@index([day])
 }

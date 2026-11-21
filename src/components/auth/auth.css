@@ -1,0 +1,148 @@
+/* Sign-up, log-in, password-reset and email-verification pages. One two-pane frame: a brand panel with
+   the illustration on the left, the form on the right. Below 920px the brand panel becomes a short
+   header above the form. Illustrations are cropped from the NexDo authentication kit (public/auth). */
+.au {
+  --au-ink: #15122b;
+  --au-muted: #5c5876;
+  --au-line: #e2dcf2;
+  --au-violet: #6a35f5;
+  --au-link: #4a3df0;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 40px);
+  color: var(--au-ink);
+  background: radial-gradient(ellipse at 0 0, #ece6ff, transparent 55%), radial-gradient(ellipse at 100% 100%, #e6efff, transparent 50%), #f7f4ff;
+}
+.au-frame {
+  width: 100%;
+  max-width: 1180px;
+  min-height: min(760px, calc(100dvh - 2 * clamp(12px, 3vw, 40px)));
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(400px, 470px);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #ebe5fa;
+  border-radius: 32px;
+  box-shadow: 0 40px 90px -40px rgb(91 63 208 / 0.35), 0 2px 6px rgb(91 63 208 / 0.05);
+}
+
+/* ---- Brand panel ---- */
+.au-aside {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 48px 48px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fdfcff 0%, #f6f1ff 100%);
+}
+.au-brand { display: block; width: 168px; }
+.au-brand .nexdo-logo { width: 168px; height: auto; mix-blend-mode: multiply; }
+.au-aside h1 { margin-top: 44px; font-size: clamp(30px, 3.3vw, 42px); font-weight: 800; line-height: 1.08; letter-spacing: -0.03em; }
+.au-aside h1 span { display: block; padding-bottom: 0.08em; color: transparent; background: linear-gradient(90deg, #1f74f4 0%, #5b3df5 48%, #c838dc 100%); -webkit-background-clip: text; background-clip: text; }
+.au-lede { max-width: 27em; margin-top: 16px; font-size: 17px; line-height: 1.5; color: var(--au-muted); }
+.au-scene { position: absolute; inset: auto 0 0 0; z-index: -1; height: 52%; background: center bottom / cover no-repeat; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 42%); mask-image: linear-gradient(to bottom, transparent 0, #000 42%); }
+.au-signup .au-scene { background-image: url('/auth/sunrise-mountains.webp'); height: 34%; }
+.au-login .au-scene { background-image: url('/auth/sunrise-mountains.webp'); height: 60%; }
+.au-reset .au-scene { background-image: url('/auth/lighthouse.webp'); height: 60%; }
+
+.au-points { display: grid; gap: 22px; max-width: 290px; margin-top: 34px; }
+.au-points li { display: flex; align-items: center; gap: 16px; font-size: 15.5px; font-weight: 700; line-height: 1.3; }
+.au-points small { display: block; font-size: 12.5px; font-weight: 500; color: var(--au-muted); }
+.au-tile { flex: none; display: grid; place-items: center; width: 50px; height: 50px; color: #4b3cf0; background: linear-gradient(145deg, #fff, #ece8ff); border: 1px solid #e3ddfb; border-radius: 15px; box-shadow: 0 8px 18px -10px rgb(91 63 208 / 0.5); }
+
+/* Decorative phone on the sign-up page. */
+.au-phone { position: absolute; right: 34px; bottom: 56px; width: 236px; padding: 9px; background: #17152a; border-radius: 38px; box-shadow: 0 30px 50px -18px rgb(40 24 110 / 0.55), inset 0 0 0 2px #3a3658; transform: rotate(8deg); }
+.au-phone-screen { position: relative; padding: 14px 14px 12px; overflow: hidden; background: linear-gradient(180deg, #fff 0%, #f6f2ff 100%); border-radius: 30px; }
+.au-phone-screen::before { content: ''; position: absolute; top: 9px; left: 50%; width: 64px; height: 18px; background: #17152a; border-radius: 12px; transform: translateX(-50%); }
+.au-phone-time { font-size: 10px; font-weight: 700; }
+.au-phone-brand { margin-top: 18px; font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+.au-phone-brand i { font-style: normal; color: #c838dc; }
+.au-phone-title { margin-top: 12px; font-size: 16px; font-weight: 800; }
+.au-phone-sub { font-size: 10px; color: var(--au-muted); }
+.au-phone-list { display: grid; gap: 7px; margin-top: 10px; }
+.au-phone-list li { display: flex; align-items: center; gap: 7px; padding: 7px 9px; font-size: 10.5px; font-weight: 600; background: #fff; border: 1px solid #eee9fb; border-radius: 10px; }
+.au-phone-list li::before { content: ''; flex: none; width: 11px; height: 11px; border: 1.5px solid #b9b2d6; border-radius: 50%; }
+.au-phone-list time { margin-left: auto; font-size: 9px; font-weight: 700; color: #4b3cf0; }
+.au-phone-next { margin-top: 10px; padding: 9px 10px; font-size: 9.5px; line-height: 1.35; color: var(--au-muted); background: linear-gradient(135deg, #efeaff, #e8f0ff); border-radius: 12px; }
+.au-phone-next b { display: block; margin-bottom: 2px; font-size: 11px; color: var(--au-ink); }
+.au-phone-tabs { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 0 6px; color: #8d87aa; }
+.au-phone-tabs span { display: grid; place-items: center; width: 34px; height: 34px; color: #fff; background: linear-gradient(135deg, #4d63f6, #7b3df5); border-radius: 50%; }
+
+/* "Stay focused today" card on the log-in page. */
+.au-focus { display: flex; align-items: center; gap: 16px; max-width: 420px; margin-top: auto; padding: 16px 18px; background: rgb(255 255 255 / 0.78); border: 1px solid #ebe5fa; border-radius: 20px; box-shadow: 0 18px 40px -24px rgb(91 63 208 / 0.6); backdrop-filter: blur(6px); }
+.au-focus img { flex: none; width: 60px; height: 56px; object-fit: cover; border-radius: 16px; }
+.au-focus b { display: block; font-size: 17px; }
+.au-focus span { font-size: 14px; line-height: 1.4; color: var(--au-muted); }
+
+/* ---- Form panel ---- */
+.au-panel { display: flex; flex-direction: column; justify-content: center; padding: 48px clamp(24px, 3.4vw, 46px); }
+.au-panel h2 { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -0.025em; }
+.au-panel-lede { margin-top: 8px; font-size: 15px; line-height: 1.5; color: var(--au-muted); }
+.au-form { display: grid; gap: 16px; margin-top: 26px; }
+.au-field { display: grid; gap: 7px; font-size: 13.5px; font-weight: 650; }
+.au-control { display: flex; align-items: center; gap: 11px; height: 50px; padding: 0 14px; color: #6f6a8c; background: #fff; border: 1px solid var(--au-line); border-radius: 13px; transition: border-color 0.15s, box-shadow 0.15s; }
+.au-control:focus-within { border-color: #7c5cff; box-shadow: 0 0 0 4px rgb(124 92 255 / 0.16); }
+.au-control input { flex: 1; min-width: 0; height: 100%; font-size: 16px; font-weight: 500; color: var(--au-ink); background: transparent; border: 0; outline: none; }
+.au-control input::placeholder { color: #8f8aa8; font-weight: 400; }
+.au-control input:focus-visible { outline: none; box-shadow: none; }
+.au-eye { display: grid; place-items: center; width: 34px; height: 34px; margin-right: -6px; color: #6f6a8c; border-radius: 9px; }
+.au-eye:hover { color: var(--au-ink); background: #f3f0fc; }
+.au-code input { font-size: 20px; font-weight: 700; letter-spacing: 0.35em; }
+.au-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.au-check { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; cursor: pointer; }
+.au-check input { width: 18px; height: 18px; accent-color: #5b3df5; cursor: pointer; }
+.au-link { font-weight: 700; color: var(--au-link); }
+.au-link:hover { text-decoration: underline; }
+button.au-link { background: none; border: 0; cursor: pointer; }
+button.au-link:disabled { color: #8f8aa8; cursor: default; text-decoration: none; }
+.au-btn { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; padding: 0 48px; font-size: 16.5px; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(90deg, #6a35f5 0%, #3f66f6 46%, #c637e0 100%); border: 0; border-radius: 15px; box-shadow: 0 14px 26px -14px rgb(91 63 208 / 0.8); transition: filter 0.15s, transform 0.05s; }
+.au-btn:hover { filter: brightness(1.07); }
+.au-btn:active { transform: translateY(1px); }
+.au-btn:disabled { cursor: not-allowed; filter: grayscale(0.35) opacity(0.6); }
+.au-btn svg { position: absolute; right: 20px; }
+.au-note { font-size: 14.5px; text-align: center; color: var(--au-muted); }
+.au-note + .au-note { margin-top: 10px; }
+.au-foot { margin-top: 22px; }
+.au-legal { max-width: 22em; margin: 14px auto 0; font-size: 13px; line-height: 1.5; text-align: center; color: var(--au-muted); }
+.au-legal a { font-weight: 600; color: var(--au-link); text-decoration: underline; }
+.au-alert { padding: 10px 13px; font-size: 14px; line-height: 1.45; border-radius: 11px; }
+.au-alert-error { color: #a0241a; background: #fef1f0; border: 1px solid #f9d3cf; }
+.au-alert-ok { color: #0b6b45; background: #ecfbf3; border: 1px solid #c3efd8; }
+.au-back { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.au-inbox { display: grid; justify-items: center; gap: 4px; padding: 20px 22px 22px; text-align: center; background: linear-gradient(180deg, #f8f5ff, #f3f0fd); border-radius: 20px; }
+.au-inbox img { width: 84px; height: 84px; object-fit: contain; mix-blend-mode: multiply; }
+.au-inbox b { font-size: 20px; letter-spacing: -0.01em; }
+.au-inbox p { font-size: 14.5px; line-height: 1.5; color: var(--au-muted); overflow-wrap: anywhere; }
+.au-bot { min-width: 0; overflow-x: auto; }
+.au-bot:empty { display: none; }
+
+/* ---- Narrower screens ---- */
+@media (max-width: 1140px) {
+  .au-phone { display: none; }
+  .au-points { max-width: none; }
+  .au-signup .au-scene { height: 26%; }
+}
+@media (max-width: 920px) {
+  .au { place-items: start center; }
+  .au-frame { grid-template-columns: minmax(0, 1fr); max-width: 560px; min-height: 0; border-radius: 28px; }
+  .au-aside { padding: 28px 28px 132px; }
+  .au-aside h1 { margin-top: 22px; font-size: clamp(26px, 6.4vw, 34px); }
+  .au-lede { margin-top: 10px; font-size: 15.5px; }
+  .au-points, .au-focus { display: none; }
+  .au-scene, .au-login .au-scene, .au-reset .au-scene { height: 150px; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 55%); mask-image: linear-gradient(to bottom, transparent 0, #000 55%); }
+  .au-panel { padding: 30px 28px 34px; }
+  .au-panel h2 { font-size: 24px; }
+}
+@media (max-width: 520px) {
+  .au { padding: 0; background: #fff; }
+  .au-frame { max-width: none; min-height: 100dvh; border: 0; border-radius: 0; box-shadow: none; align-content: start; }
+  .au-aside { padding: 22px 20px 124px; }
+  .au-brand, .au-brand .nexdo-logo { width: 140px; }
+  /* Room to scroll the last links clear of the floating support button. */
+  .au-panel { padding: 24px 20px 96px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .au-control, .au-btn { transition: none; }
+}

@@ -1,5 +1,6 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {POST} from './route';
+vi.mock('@/server/ai-quota', () => ({ takeAiQuota: vi.fn(), refundAiQuota: vi.fn() })); // The daily quota has its own tests.
 const auth=vi.hoisted(()=>({requireUser:vi.fn()}));vi.mock('@/server/auth',()=>auth);
 const upstream=vi.fn();
 const request=(consent=true)=>new Request('https://test/api/shopping/image',{method:'POST',body:JSON.stringify({name:'Butter',details:'Gold wrapper',consent})});

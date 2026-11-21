@@ -9,6 +9,12 @@ import { adminSignInMessage } from './email/messages';
 export const ADMIN_CODE_TTL_MINUTES = 10;
 export const ADMIN_CODE_MAX_ATTEMPTS = 5;
 const ADMIN_SESSION_HOURS = 8;
+// An admin session left unused this long ends, even inside its 8 hours. ADMIN_SESSION_IDLE_MINUTES, default 60.
+export function adminSessionIdleMs() {
+  const minutes = Number(process.env.ADMIN_SESSION_IDLE_MINUTES);
+  return (Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, ADMIN_SESSION_HOURS * 60) : 60) * 60_000;
+}
+const ADMIN_SESSION_TOUCH_MS = 60_000;
 
 export const adminTokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const opaqueToken = () => randomBytes(32).toString('hex');
@@ -76,7 +82,7 @@ export async function verifyAdminCode(id: string, code: string) {
   const session = opaqueToken();
   const claimed = await prisma.adminLoginToken.updateMany({
     where: { id, usedAt: null, expiresAt: { gt: new Date() } },
-    data: { usedAt: new Date(), sessionHash: adminTokenHash(session), sessionExpiresAt: new Date(Date.now() + ADMIN_SESSION_HOURS * 60 * 60_000) },
+    data: { usedAt: new Date(), sessionHash: adminTokenHash(session), sessionExpiresAt: new Date(Date.now() + ADMIN_SESSION_HOURS * 60 * 60_000), sessionLastUsedAt: new Date() },
   });
   if (claimed.count !== 1) throw invalid();
   return session;
@@ -101,10 +107,27 @@ export async function verifyAdminCodeForEmail(value: string, code: string) {
 export async function adminUserForSession(session: string) {
   if (!/^[a-f0-9]{64}$/.test(session)) return null;
   const token = await prisma.adminLoginToken.findUnique({ where: { sessionHash: adminTokenHash(session) }, include: { user: true } });
-  if (!token?.usedAt || !token.sessionExpiresAt || token.sessionExpiresAt <= new Date() || token.user.deletedAt || !isAdminEmail(token.user.email)) return null;
+  const now = new Date();
+  if (!token?.usedAt || !token.sessionExpiresAt || token.sessionExpiresAt <= now || token.user.deletedAt || !isAdminEmail(token.user.email)) return null;
+  // Sessions created before idle tracking have no sessionLastUsedAt; they count from their first use after it.
+  const idleFor = token.sessionLastUsedAt ? now.getTime() - token.sessionLastUsedAt.getTime() : null;
+  if (idleFor !== null && idleFor >= adminSessionIdleMs()) {
+    await revokeAdminSession(session);
+    return null;
+  }
+  if (idleFor === null || idleFor >= ADMIN_SESSION_TOUCH_MS) {
+    // Activity tracking must never fail the request it is observing.
+    await prisma.adminLoginToken.updateMany({ where: { id: token.id }, data: { sessionLastUsedAt: now } }).catch(() => undefined);
+  }
   return token.user;
 }
 
 export async function revokeAdminSession(session: string) {
   await prisma.adminLoginToken.updateMany({ where: { sessionHash: adminTokenHash(session) }, data: { sessionHash: null, sessionExpiresAt: null } });
+}
+
+/** Ends every admin session of this account, on every browser. Returns how many were ended. */
+export async function revokeAdminSessionsForUser(userId: string) {
+  const { count } = await prisma.adminLoginToken.updateMany({ where: { userId, sessionHash: { not: null } }, data: { sessionHash: null, sessionExpiresAt: null } });
+  return count;
 }

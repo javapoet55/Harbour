@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/server/db';
-import { consumeLimit, limitCodeSend, securityRef, securityEvent } from './abuse';
+import { consumeLimit, limitCodeSend, securityRef, securityEvent, limitLogin, clearLoginFailures, LOGIN_LIMITS } from './abuse';
 import { recordPromotionEligibility } from './promotion';
 import { signupProof, registerAccount, sendEmailVerification, verifyEmail, requestEmailVerification } from '@/server/account-auth';
 const session = vi.hoisted(() => ({ id: '' }));
-vi.mock('@/server/session', () => ({ readUserId: async () => session.id || null, writeSession: vi.fn() }));
+vi.mock('@/server/session', () => ({ readSession: async () => session.id ? { userId: session.id, sessionId: null, issuedAt: new Date() } : null, writeSession: vi.fn() }));
 vi.mock('./email-risk', async original => ({ ...await original<typeof import('./email-risk')>(), checkEmail: async (email: string) => ({ normalizedEmail: email, decision: 'ALLOW', reasonCodes: [] }) }));
 import { requireUser } from '@/server/auth';
 import { POST as accountExistsPOST } from '@/app/api/auth/account-exists/route';
@@ -100,5 +100,43 @@ describe('durable signup abuse protection', () => {
     expect(await second.json()).toEqual({ error: 'An account with this email already exists. Sign in or reset your password.' });
     expect(await prisma.user.count({where:{email}})).toBe(1);
     expect((await prisma.user.findUniqueOrThrow({where:{email}})).passwordHash).toBe(user.passwordHash);
+  });
+});
+
+describe('sign-in attempt limits', () => {
+  const req = () => new Request('https://x/api/auth/login', { method: 'POST' });
+  it('stops password guessing on one account after the limit, whatever the capitalisation', async () => {
+    const email = `${unique()}@company.com`;
+    for (let i = 0; i < LOGIN_LIMITS.account; i++) await limitLogin(req(), i % 2 ? email.toUpperCase() : ` ${email} `);
+    await expect(limitLogin(req(), email)).rejects.toThrow('AUTH_RATE_LIMITED');
+  });
+  it('does not affect other accounts', async () => {
+    const first = `${unique()}@company.com`;
+    for (let i = 0; i < LOGIN_LIMITS.account; i++) await limitLogin(req(), first);
+    await expect(limitLogin(req(), `${unique()}@company.com`)).resolves.toBeUndefined();
+  });
+  it('treats an account that does not exist the same as one that does', async () => {
+    const email = `${unique()}@nowhere.example`;
+    for (let i = 0; i < LOGIN_LIMITS.account; i++) await limitLogin(req(), email);
+    await expect(limitLogin(req(), email)).rejects.toThrow('AUTH_RATE_LIMITED');
+  });
+  it('starts over after the right password', async () => {
+    const email = `${unique()}@company.com`;
+    for (let i = 0; i < LOGIN_LIMITS.account; i++) await limitLogin(req(), email);
+    await clearLoginFailures(email);
+    await expect(limitLogin(req(), email)).resolves.toBeUndefined();
+  });
+  it('limits one address across many accounts when the address is known', async () => {
+    vi.stubEnv('AUTH_TRUSTED_IP_HEADER', 'x-client-ip');
+    const withIp = () => new Request('https://x', { headers: { 'x-client-ip': `203.0.113.${Math.floor(Math.random() * 200) + 1}` } });
+    const ip = new Request('https://x', { headers: { 'x-client-ip': '198.51.100.77' } });
+    await prisma.authRateBucket.deleteMany({ where: { key: securityRef('login-address:198.51.100.77') } });
+    for (let i = 0; i < LOGIN_LIMITS.address; i++) await limitLogin(ip, `${unique()}@company.com`);
+    await expect(limitLogin(ip, `${unique()}@company.com`)).rejects.toThrow('AUTH_RATE_LIMITED');
+    await expect(limitLogin(withIp(), `${unique()}@company.com`)).resolves.toBeUndefined();
+  });
+  it('does not lock customers out when the address cannot be read', async () => {
+    vi.stubEnv('AUTH_TRUSTED_IP_HEADER', 'x-client-ip');
+    await expect(limitLogin(new Request('https://x'), `${unique()}@company.com`)).resolves.toBeUndefined();
   });
 });

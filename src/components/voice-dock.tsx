@@ -11,6 +11,9 @@ import { useFocusSession, formatFocus } from './focus-session';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'confirm' | 'error';
 
+/** The microphone and its "Voice is …" status line are hidden on the web app for now; typing still works. Set to true to bring them back. */
+const SHOW_MIC: boolean = false;
+
 type Turn = {
   spoken: string;
   visual: { summary: string; appointments: string[]; tasks: string[]; overdue: string[]; next: string; rangeLabel: string; sections?: Array<{ title: string; items: string[] }> };
@@ -94,6 +97,7 @@ export function VoiceDock() {
   const [audioPlaying, setAudioPlaying] = useState(false);
   const dockRef = useRef<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [summoned, setSummoned] = useState(false);
   const [mobileView, setMobileView] = useState(false);
   const [question, setQuestion] = useState('');
   const [history, setHistory] = useState<Array<{ question: string; answer: string; visual?: Turn['visual'] }>>([]);
@@ -102,6 +106,8 @@ export function VoiceDock() {
   useEffect(() => {
     const open = (event: Event) => {
       setSheetOpen(true);
+      setSummoned(true);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
       const detail = (event as CustomEvent<{ prompt?: string; contextActionId?: string }>).detail;
       if (detail?.prompt) { contextActionRef.current = detail.contextActionId; void submitRef.current?.(detail.prompt); }
     };
@@ -110,6 +116,7 @@ export function VoiceDock() {
   }, []);
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
+    setSummoned(false);
     turnRequestRef.current++;
     speechRequestRef.current?.abort();
     recRef.current?.abort();
@@ -271,15 +278,21 @@ export function VoiceDock() {
     recRef.current.start();
   }
 
+  // My Day has its own Ask Nexdo bar at the top of the page, so on a desktop this dock stays out of the
+  // way there until a question has been asked, and can be closed again afterwards.
+  const onMyDay = pathname === '/' && !mobileView;
+  const quiet = onMyDay && !summoned && state === 'idle' && !turn && !error && !text.trim();
+
   return (
     <>
     {sheetOpen && mobileView && <div className="voice-sheet-backdrop" onClick={closeSheet} />}
-    <section ref={dockRef} className={cn('harbor-voice-dock fixed inset-x-3 z-40 md:bottom-6 md:left-[272px] md:right-6', sheetOpen && mobileView && 'voice-sheet-open')} role={sheetOpen && mobileView ? 'dialog' : undefined} aria-modal={sheetOpen && mobileView ? true : undefined} aria-label={sheetOpen && mobileView ? 'Ask Nexdo' : 'Voice assistant'}>
+    <section ref={dockRef} className={cn('harbor-voice-dock fixed inset-x-3 z-40 md:bottom-6 md:left-[272px] md:right-6', sheetOpen && mobileView && 'voice-sheet-open', quiet && 'voice-quiet')} role={sheetOpen && mobileView ? 'dialog' : undefined} aria-modal={sheetOpen && mobileView ? true : undefined} aria-label={sheetOpen && mobileView ? 'Ask Nexdo' : 'Voice assistant'}>
       <div className="voice-card harbor-card mx-auto max-w-3xl p-2 shadow-lg sm:p-3">
-        <div className="mobile-voice-launcher md:hidden"><button ref={openerRef} onClick={() => setSheetOpen(true)}>{pathname === '/calendar' ? 'Ask Nexdo about my schedule…' : 'Ask Nexdo…'}</button><button aria-label="Ask Nexdo by voice" className="mobile-voice-mic" onClick={listen}><Mic size={24} /></button></div>
+        <div className="mobile-voice-launcher md:hidden"><button ref={openerRef} onClick={() => setSheetOpen(true)}>{pathname === '/calendar' ? 'Ask Nexdo about my schedule…' : 'Ask Nexdo…'}</button>{SHOW_MIC && <button aria-label="Ask Nexdo by voice" className="mobile-voice-mic" onClick={listen}><Mic size={24} /></button>}</div>
         <header className="voice-sheet-header"><span className="voice-sheet-handle" /><h2>Ask Nexdo</h2><button aria-label="Close Ask Nexdo" onClick={closeSheet}><X size={23} /></button></header>
+        {onMyDay && !quiet && <div className="voice-dismiss"><span>Ask Nexdo</span><button type="button" aria-label="Close Ask Nexdo" onClick={() => { closeSheet(); setError(''); setText(''); }}><X size={18} aria-hidden="true" /></button></div>}
         <div className="voice-composer flex items-center gap-2">
-          <button
+          {SHOW_MIC && <button
             type="button"
             className={cn('mic harbor-btn size-11 rounded-full p-0', state !== 'idle' && 'font-bold')}
             data-state={state}
@@ -287,7 +300,7 @@ export function VoiceDock() {
             onClick={listen}
           >
             <Mic className="size-5" />
-          </button>
+          </button>}
           <form
             className="flex min-w-0 flex-1 gap-2"
             onSubmit={(e) => {
@@ -305,7 +318,7 @@ export function VoiceDock() {
             <button type="submit" className="harbor-btn harbor-btn-brand px-3">Ask</button>
           </form>
         </div>
-        <p className="voice-desktop-status mt-2 hidden text-xs uppercase tracking-wide text-[var(--faint)] sm:block">Voice is {state.replace('-', ' ')}</p>
+        {SHOW_MIC && <p className="voice-desktop-status mt-2 hidden text-xs uppercase tracking-wide text-[var(--faint)] sm:block">Voice is {state.replace('-', ' ')}</p>}
         <div className="voice-conversation">
         {sheetOpen && mobileView && <>{history.slice(0, turn ? -1 : undefined).map((item, index) => <div key={index} className="voice-history"><p className="voice-question">{item.question}</p>{item.visual?.sections?.length ? <details><summary className="voice-response-summary">Previous answer · {item.visual.summary}</summary><AnswerSections visual={item.visual} /></details> : <p className="voice-answer">{item.answer}</p>}</div>)}{question && <p className="voice-question">{question}</p>}{!question && <div className="voice-welcome"><p>Let’s make room for what matters.</p><div className="voice-prompt-list" aria-label="Suggested questions">{PROMPT_SHORTCUTS.map(({ label, detail, prompt, Icon }) => <button key={label} type="button" className="voice-prompt" onClick={() => void submit(prompt)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{detail}</small></span><ChevronRight size={18} aria-hidden="true" /></button>)}</div></div>}</>}
         {state === 'processing' && <p role="status" className="p-3 text-sm text-[var(--muted)]">Nexdo is thinking…</p>}

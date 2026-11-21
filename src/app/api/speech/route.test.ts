@@ -3,6 +3,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { requireUser } from '@/server/auth';
 import { POST } from './route';
 import { nexdoPersonality } from '@/server/assistant-personality';
+vi.mock('@/server/ai-quota', () => ({ takeAiQuota: vi.fn(), refundAiQuota: vi.fn() })); // The daily quota has its own tests.
 
 vi.mock('@/server/auth', () => ({ requireUser: vi.fn() }));
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetAllMocks(); });

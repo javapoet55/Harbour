@@ -140,6 +140,20 @@ describe('admin sign-out', () => {
     expect((await logout(TOKEN)).headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
+  it('asks the backend to end every session for "Sign out everywhere"', async () => {
+    backend.mockResolvedValue(new Response(null, { status: 204 }));
+    const response = await authPOST(adminRequest('/api/admin/auth', { body: { action: 'logout-everywhere' }, cookie: TOKEN }));
+    expect(response.status).toBe(200);
+    expect(call(0)).toMatchObject({ url: 'http://backend.test/api/admin/session?everywhere=1', method: 'DELETE' });
+    expect(call(0).headers).toMatchObject({ Authorization: `Bearer ${TOKEN}`, 'X-Admin-Client': SECRET });
+    expect(response.headers.get('set-cookie')).toMatch(/^__Host-nexdo_admin=;.*Max-Age=0/i);
+    // Like a plain sign-out, it keeps the cookie when the backend could not do it, so the admin can retry.
+    backend.mockResolvedValue(Response.json({ error: 'down' }, { status: 503 }));
+    const failed = await authPOST(adminRequest('/api/admin/auth', { body: { action: 'logout-everywhere' }, cookie: TOKEN }));
+    expect(failed.status).toBe(503);
+    expect(failed.headers.get('set-cookie')).toBeNull();
+  });
+
   it('clears a cookie without calling the backend when there is no valid token', async () => {
     const response = await logout('not-a-token');
     expect(response.status).toBe(200);

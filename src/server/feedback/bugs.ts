@@ -47,19 +47,27 @@ export async function screenshotCipher(input: BugInput) {
   return encryptCredential(jpeg.toString('base64'));
 }
 export async function saveBug(user: { id: string; name: string }, input: BugInput, now = new Date()) {
+  return persistReport(user, { id: input.id, description: input.description, metadata: input.metadata, screenshot: () => screenshotCipher(input) }, now);
+}
+
+/**
+ * Saves one report or support ticket with a short BR- reference, idempotently by id. The support inbox is
+ * emailed from the same outbox (maintainBugReports), and the report appears in the admin Bug reports page.
+ */
+export async function persistReport(user: { id: string }, input: { id: string; description: string; metadata: object; screenshot?: () => Promise<string | null> }, now = new Date()) {
   const existing = await prisma.feedback.findUnique({ where: { id: input.id }, include: { bugReport: true } });
   if (existing) {
     if (existing.userId !== user.id || !existing.bugReport) throw new Error('BUG_ID_CONFLICT');
     return existing.bugReport.reference;
   }
   await consumeLimit('bug-report-create', user.id, 5, 86_400_000);
-  const screenshot = await screenshotCipher(input);
+  const screenshot = input.screenshot ? await input.screenshot() : null;
   for (let attempt = 0; attempt < 20; attempt++) {
     const reference = referenceFor(input.id, attempt);
     try {
     // Atomic parent+outbox write. Success means durable receipt, not successful email delivery.
     const saved = await prisma.feedback.upsert({ where: { id: input.id }, update: {}, create: {
-      id: input.id, userId: user.id, customerName: "NexDo user", title: `Bug report ${reference}`,
+      id: input.id, userId: user.id, customerName: "NexDo user", title: `${'platform' in input.metadata ? 'Support ticket' : 'Bug report'} ${reference}`,
       description: redactSecrets(input.description), stars: 0,
       bugReport: { create: { reference, metadata: JSON.stringify(input.metadata), screenshot,
         screenshotExpiresAt: new Date(+now + 7 * 86400000), expiresAt: new Date(+now + 90 * 86400000) } },

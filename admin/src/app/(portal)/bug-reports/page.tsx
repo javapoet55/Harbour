@@ -11,7 +11,7 @@ import { PageHeading, Panel } from '@/components/admin/admin-ui';
 const schema = z.object({ bugs: z.array(z.object({
   id: z.string().uuid(), reference: z.string(), description: z.string(), createdAt: z.string().datetime(),
   status: z.enum(bugStatuses).default('open'), hasScreenshot: z.boolean(), metadata: z.object({
-    appVersion: z.string(), buildNumber: z.string(), deviceModel: z.string(), iosVersion: z.string(), screen: z.string(),
+    appVersion: z.string(), buildNumber: z.string(), deviceModel: z.string(), iosVersion: z.string(), screen: z.string(), platform: z.literal('web').optional(),
   }).nullable(),
 })), nextCursor: z.string().nullable() });
 
@@ -75,8 +75,8 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
             <tbody>{bugs.map(bug => <tr key={bug.id}>
               <th scope="row">{bug.reference}</th>
               <td className="admin-bug-description">{bug.description}</td>
-              <td>{bug.metadata ? <><strong className="admin-bug-app">{bug.metadata.screen}</strong><small>v{bug.metadata.appVersion} ({bug.metadata.buildNumber})</small></> : 'Unavailable'}</td>
-              <td>{bug.metadata ? <>{bug.metadata.deviceModel}<small>iOS {bug.metadata.iosVersion}</small></> : 'Unavailable'}</td>
+              <td>{bug.metadata ? <><strong className="admin-bug-app">{bug.metadata.screen}</strong><small>{bug.metadata.platform === 'web' ? `Support chat · ${bug.metadata.buildNumber}` : `v${bug.metadata.appVersion} (${bug.metadata.buildNumber})`}</small></> : 'Unavailable'}</td>
+              <td>{bug.metadata ? <>{bug.metadata.deviceModel}{bug.metadata.platform !== 'web' && <small>iOS {bug.metadata.iosVersion}</small>}</> : 'Unavailable'}</td>
               <td><time dateTime={bug.createdAt}>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(bug.createdAt))}</time></td>
               <td>{bug.hasScreenshot ? <ScreenshotPreview id={bug.id} reference={bug.reference}/> : 'Not attached or expired'}</td>
               <td><BugStatusSelect key={bug.status} reference={bug.reference} status={bug.status} saveAction={changeStatus.bind(null, bug.id)}/></td>

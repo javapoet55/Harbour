@@ -1,4 +1,5 @@
 import { voiceAllowanceResponse } from '@/server/voice/usage';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireUser } from '@/server/auth';
@@ -36,8 +37,9 @@ async function readAudio(req: Request): Promise<Blob | null> {
 }
 
 async function healthHandlerPOST(req: Request) {
+  let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    const user = await requireUser();
+    user = await requireUser();
     const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
     if (allowance) return allowance;
   } catch (err) { return jsonError(err); }
@@ -46,6 +48,7 @@ async function healthHandlerPOST(req: Request) {
     if (!audio) return failure('Record a short voice message of up to two minutes.', 400);
     const key = process.env.OPENAI_API_KEY;
     if (!key) return failure('Voice transcription is not configured yet. You can still type your request.', 503);
+    try { await takeAiQuota(user, 'dictation'); } catch (err) { return jsonError(err); }
     const form = new FormData();
     form.set('file', audio, 'voice.m4a');
     form.set('model', 'gpt-4o-mini-transcribe');
@@ -54,7 +57,7 @@ async function healthHandlerPOST(req: Request) {
       method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form,
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)]),
     });
-    if (!response.ok) return failure('Voice transcription is temporarily unavailable. Please try again.', 502);
+    if (!response.ok) { await refundAiQuota(user, 'dictation'); return failure('Voice transcription is temporarily unavailable. Please try again.', 502); }
     const result: unknown = await response.json();
     const text = result && typeof result === 'object' && 'text' in result && typeof result.text === 'string' ? result.text.trim() : '';
     if (!text) return failure('No speech was recognized. Please record your request again.', 422);

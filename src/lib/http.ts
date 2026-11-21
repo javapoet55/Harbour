@@ -1,8 +1,15 @@
 import { ScheduleWarning } from './schedule-warning';
 import { NextResponse } from 'next/server';
 import { log } from './logger';
+import { aiQuotaBody } from './ai-quota-message';
 
 export function jsonError(err: unknown) {
+  // A signed-in AI feature's daily uses are spent (src/server/ai-quota.ts).
+  if (err instanceof Error && err.message === 'AI_DAILY_LIMIT_REACHED' && 'feature' in err && 'resetsAt' in err && err.resetsAt instanceof Date) {
+    const quota = err as Error & { feature: string; limit: number; resetsAt: Date };
+    return NextResponse.json(aiQuotaBody(quota), { status: 429, headers: { 'Cache-Control': 'private, no-store', 'Retry-After': String(Math.max(1, Math.ceil((quota.resetsAt.getTime() - Date.now()) / 1000))) } });
+  }
+  if (err instanceof Error && err.message === 'AI_QUOTA_UNAVAILABLE') return NextResponse.json({ error: 'AI features are briefly unavailable. Please try again in a minute.' }, { status: 503 });
   if (err instanceof Error && ['AUTH_RATE_LIMITED', 'BOT_CHECK_FAILED', 'SIGNUP_SECURITY_UNAVAILABLE', 'DISPOSABLE_EMAIL', 'INVALID_EMAIL_DOMAIN'].includes(err.message)) {
     const messages: Record<string, string> = { AUTH_RATE_LIMITED: 'Too many attempts. Please try again later.', BOT_CHECK_FAILED: 'Please complete the security check and try again.', SIGNUP_SECURITY_UNAVAILABLE: 'Account security checks are temporarily unavailable. Please try again shortly.', DISPOSABLE_EMAIL: 'Please use a permanent email address to create your Nexdo account.', INVALID_EMAIL_DOMAIN: 'Please enter a valid email address.' };
     return NextResponse.json({ error: messages[err.message] }, { status: err.message === 'AUTH_RATE_LIMITED' ? 429 : err.message === 'SIGNUP_SECURITY_UNAVAILABLE' ? 503 : 400 });
@@ -10,6 +17,12 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && err.message === 'TASK_CHANGED') return NextResponse.json({ error: 'Your task changed. Refresh and try again.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_TASK_STATE') return NextResponse.json({ error: 'Restore this task before starting it.' }, { status: 409 });
   if (err instanceof ScheduleWarning) return NextResponse.json({ code: 'SCHEDULE_WARNING', error: err.message, warnings: err.warnings }, { status: 409 });
+  if (err instanceof Error && err.message === 'INVALID_REMINDER') return NextResponse.json({ error: 'Enter a reminder of up to 200 characters, notes of up to 4,000, and a valid time.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'REMINDER_TIME_PASSED') return NextResponse.json({ error: 'Choose a time in the future.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'REMINDER_NO_DELIVERY') return NextResponse.json({ error: 'Choose at least one way to be reminded: pop-up, email or call.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'REMINDER_CALL_PHONE_UNVERIFIED') return NextResponse.json({ code: 'REMINDER_CALL_PHONE_UNVERIFIED', error: 'Verify your phone number so Nexdo can call you with this reminder.' }, { status: 409 });
+  if (err instanceof Error && err.message === 'REMINDER_CALLS_UNAVAILABLE') return NextResponse.json({ code: 'REMINDER_CALLS_UNAVAILABLE', error: 'Reminder calls aren’t available right now. Choose pop-up or email instead.' }, { status: 503 });
+  if (err instanceof Error && err.message === 'INVALID_NOTE') return NextResponse.json({ error: 'Write a note of up to 20,000 characters, with a title of up to 200.' }, { status: 400 });
   if (err instanceof Error && err.message === 'INVALID_PROJECT') return NextResponse.json({ error: 'Enter a project name of 1–80 characters and a valid color.' }, { status: 400 });
   if (err && typeof err === 'object' && 'code' in err && ['P2034', 'P2028'].includes(String(err.code))) return NextResponse.json({ error: 'Your data changed while this request was processing. Refresh and try again.' }, { status: 409 });
   if (err instanceof Error && ['INVALID_LOCAL_TIME', 'INVALID_TASK'].includes(err.message)) return NextResponse.json({ error: err.message === 'INVALID_LOCAL_TIME' ? 'That local time does not exist. Choose a valid time outside the daylight-saving clock change.' : 'Enter a valid task title, date, and positive duration.' }, { status: 400 });

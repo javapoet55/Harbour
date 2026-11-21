@@ -1,17 +1,17 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { NexdoLogo } from '@/components/nexdo-logo';
-import { PasswordInput } from '@/components/password-input';
+import { ArrowLeft, KeyRound, Mail } from 'lucide-react';
+import { AuthAlert, AuthButton, AuthField, AuthPassword, AuthShell } from '@/components/auth/auth-ui';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -23,8 +23,9 @@ export default function ResetPasswordPage() {
       const response = await fetch('/api/auth/password-reset/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) { setError(body.error || 'Could not request a reset code.'); return; }
-      setSent(true); setMessage(body.developmentCode ? `Your development code is ${body.developmentCode}.` : `${body.message} It expires in 15 minutes.`);
-    } catch { setError("Could not connect. Please check your connection and try again."); }
+      setSent(true);
+      setMessage(body.developmentCode ? `Your development code is ${body.developmentCode}.` : '');
+    } catch { setError('Could not connect. Please check your connection and try again.'); }
     finally { setBusy(false); }
   }
 
@@ -35,34 +36,53 @@ export default function ResetPasswordPage() {
 
   async function reset(event: FormEvent) {
     event.preventDefault(); setError(''); setMessage('');
-    if (password !== confirmation) { setError('Passwords do not match.'); return; }
     setBusy(true);
     try {
       const response = await fetch('/api/auth/password-reset/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code, password }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) { setError(body.error || 'Could not reset your password.'); return; }
       router.push('/login?reset=complete');
-    } catch { setError("Could not connect. Please check your connection and try again."); }
+    } catch { setError('Could not connect. Please check your connection and try again.'); }
     finally { setBusy(false); }
   }
 
-  return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">
-    <Link href="/welcome" className="nexdo-login-brand" aria-label="Nexdo home"><NexdoLogo priority /></Link>
-    <h1 className="mt-2 text-3xl font-semibold">Reset your password</h1>
-    <p className="mt-2 text-[var(--muted)]">We’ll help you get back to a clearer day.</p>
-    <form onSubmit={sent ? reset : requestCode} className="harbor-card mt-6 space-y-3 p-5">
-      <label className="block text-sm font-medium">Email address<input className="harbor-input mt-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-      {sent && <>
-        <label className="block text-sm font-medium">Verification code<input className="harbor-input mt-1" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} /></label>
-        <label className="block text-sm font-medium">New password<PasswordInput minLength={1} required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>
-        <label className="block text-sm font-medium">Confirm new password<PasswordInput minLength={1} required value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="new-password" /></label>
+  return (
+    <AuthShell
+      scene="reset"
+      aside={<>
+        <h1>Reset your <span>password</span></h1>
+        <p className="au-lede">Enter the email linked to NexDo and we’ll send you a 6-digit reset code.</p>
       </>}
-      {message && <p className="text-sm text-[var(--ok)]" role="status">{message}</p>}
-      {error && <p className="text-sm text-[var(--danger)]" role="alert">{error}</p>}
-      <button className="harbor-btn harbor-btn-brand w-full" disabled={busy}>{busy ? 'Working…' : sent ? 'Set new password' : 'Send reset code'}</button>
-      {sent && <button type="button" className="w-full text-sm font-medium text-[var(--brand)]" disabled={busy} onClick={() => void sendCode()}>Send a new code</button>}
-      {sent && <button type="button" className="w-full text-sm font-medium text-[var(--brand)]" onClick={() => { setSent(false); setMessage(''); }}>Use a different email</button>}
-    </form>
-    <p className="mt-4 text-center text-sm text-[var(--muted)]"><Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Back to sign in</Link></p>
-  </main>;
+    >
+      {!sent ? <>
+        <h2>Forgot your password?</h2>
+        <p className="au-panel-lede">It happens. We’ll email you a code to set a new one.</p>
+        <form onSubmit={requestCode} className="au-form">
+          <AuthField label="Email address" icon={Mail} type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" />
+          {error && <AuthAlert kind="error">{error}</AuthAlert>}
+          <AuthButton type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset code'}</AuthButton>
+        </form>
+      </> : <>
+        <div className="au-inbox">
+          <Image src="/auth/email-sent.webp" alt="" width={240} height={240} />
+          <b>Check your inbox</b>
+          <p>If <strong>{email}</strong> has a NexDo account, we’ve sent it a 6-digit code. Enter it below to create a new password. The code expires in 15 minutes.</p>
+        </div>
+        <form onSubmit={reset} className="au-form">
+          <AuthField label="Reset code" icon={KeyRound} code inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} placeholder="000000" />
+          <AuthPassword label="New password" minLength={1} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a new password" autoComplete="new-password" />
+          {message && <AuthAlert kind="ok">{message}</AuthAlert>}
+          {error && <AuthAlert kind="error">{error}</AuthAlert>}
+          <AuthButton type="submit" disabled={busy}>{busy ? 'Working…' : 'Set new password'}</AuthButton>
+        </form>
+        <div className="au-foot">
+          <p className="au-note">Didn’t get it? <button type="button" className="au-link" disabled={busy} onClick={() => void sendCode()}>Send a new code</button></p>
+          <p className="au-note"><button type="button" className="au-link" onClick={() => { setSent(false); setCode(''); setPassword(''); setMessage(''); setError(''); }}>Use a different email</button></p>
+        </div>
+      </>}
+      <div className="au-foot">
+        <p className="au-note"><Link className="au-link au-back" href="/login"><ArrowLeft size={17} aria-hidden="true" />Back to login</Link></p>
+      </div>
+    </AuthShell>
+  );
 }
