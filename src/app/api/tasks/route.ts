@@ -58,8 +58,11 @@ async function healthHandlerPOST(req: Request) {
         ? zonedDateTime(body.date, body.time || '09:00', user.timeZone)
         : null;
     const startAt = intent.recognized && intent.reminderDate ? intent.reminderDate : suppliedStartAt;
+    // A reminder added by hand (web Quick Add → Reminder): a five-minute item that notifies at its own time,
+    // saved the same way the voice assistant saves a reminder.
+    const manualReminder = body.reminder === true && !intent.recognized && startAt !== null;
     const dueAt = intent.recognized ? intent.dueDate ?? startAt : startAt;
-    if (!existing && !intent.recognized) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
+    if (!existing && !intent.recognized && !manualReminder) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
     const task = await createTask({
       userId: user.id,
       idempotencyKey,
@@ -70,11 +73,12 @@ async function healthHandlerPOST(req: Request) {
       status: body.status ?? 'PLANNED',
       startAt,
       dueAt,
-      reminderAt: intent.recognized ? intent.reminderDate : null,
-      lifeReminderType: intent.recognized ? intent.reminderType : null,
-      lifeReminderConfidence: intent.recognized ? intent.confidence : null,
-      originalUserText: intent.recognized ? intent.originalUserText : null,
-      durationMin: intent.recognized ? 5 : body.durationMin,
+      kind: manualReminder ? 'REMINDER' : undefined,
+      reminderAt: intent.recognized ? intent.reminderDate : manualReminder ? startAt : null,
+      lifeReminderType: intent.recognized ? intent.reminderType : manualReminder ? 'general' : null,
+      lifeReminderConfidence: intent.recognized ? intent.confidence : manualReminder ? 1 : null,
+      originalUserText: intent.recognized ? intent.originalUserText : manualReminder ? originalTitle : null,
+      durationMin: intent.recognized || manualReminder ? 5 : body.durationMin,
       energyLevel: ['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel) ? body.energyLevel : undefined,
       waitingOn: body.waitingOn,
       critical: Boolean(body.critical),

@@ -243,3 +243,120 @@ export function folderTasks<T extends { id: string; title: string; status: strin
       return a.title.localeCompare(b.title, 'en-US', { numeric: true, sensitivity: 'base' });
     });
 }
+
+/* ---------- Web Tasks dashboard: buckets, counts and weekly progress ---------- */
+
+export const TASK_BUCKETS = ['overdue', 'today', 'tomorrow', 'week', 'later', 'unscheduled', 'completed'] as const;
+export type TaskBucket = (typeof TASK_BUCKETS)[number];
+export const TASK_CHIPS = ['All Tasks', 'Today', 'Tomorrow', 'This Week'] as const;
+export type TaskChip = (typeof TASK_CHIPS)[number];
+export const TASK_SORTS = ['Due Date', 'Priority', 'Title'] as const;
+export type TaskSort = (typeof TASK_SORTS)[number];
+
+type DashTask = { id: string; title: string; status: string; priority: string; critical?: boolean; notes?: string | null; startAt?: string | null; dueAt?: string | null; completedAt?: string | null };
+const OPEN_STATUSES = new Set(['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING']);
+const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
+const priorityOf = (task: Pick<DashTask, 'priority' | 'critical'>) => (task.critical ? 'CRITICAL' : task.priority);
+const taskTime = (task: Pick<DashTask, 'startAt' | 'dueAt'>) => parseServerDate(task.startAt ?? task.dueAt);
+
+/**
+ * Where a task's own date falls relative to today: before today, today, tomorrow, the rest of the next
+ * seven days, later, or no date. Completed tasks keep this as their range so the date chips still apply.
+ */
+export function dateBucket(task: Pick<DashTask, 'startAt' | 'dueAt'>, timeZone: string, now: number): Exclude<TaskBucket, 'completed'> {
+  const at = taskTime(task);
+  if (at === null) return 'unscheduled';
+  const today = startOfDay(now, timeZone);
+  if (at < today) return 'overdue';
+  const tomorrow = addDays(now, 1, timeZone);
+  if (at < tomorrow) return 'today';
+  if (at < addDays(now, 2, timeZone)) return 'tomorrow';
+  return at < addDays(now, 7, timeZone) ? 'week' : 'later';
+}
+
+const CHIP_RANGES: Record<TaskChip, ReadonlySet<string>> = {
+  'All Tasks': new Set(TASK_BUCKETS),
+  Today: new Set(['today']),
+  Tomorrow: new Set(['tomorrow']),
+  'This Week': new Set(['today', 'tomorrow', 'week']),
+};
+
+export type TaskFilters = { chip: TaskChip; status: 'Open' | 'Completed' | 'All'; priority: string; highPriority: boolean; search: string; sort: TaskSort };
+export const DEFAULT_TASK_FILTERS: TaskFilters = { chip: 'All Tasks', status: 'Open', priority: 'All', highPriority: false, search: '', sort: 'Due Date' };
+
+/**
+ * The sections of the Tasks page: open tasks grouped by when they fall, then completed ones. A search
+ * looks through every date and status, so it finds finished work too. Empty sections are left out.
+ */
+export function taskSections<T extends DashTask>(tasks: T[], filters: TaskFilters, timeZone: string, now: number): Array<{ bucket: TaskBucket; tasks: T[] }> {
+  const term = filters.search.trim();
+  const ranges = term ? CHIP_RANGES['All Tasks'] : CHIP_RANGES[filters.chip];
+  const status = term ? 'All' : filters.status;
+  const groups = new Map<TaskBucket, T[]>();
+  for (const task of tasks) {
+    const done = isDone(task);
+    if (!done && !OPEN_STATUSES.has(task.status)) continue;
+    if (status === 'Open' ? done : status === 'Completed' ? !done : false) continue;
+    const level = priorityOf(task);
+    if (filters.highPriority && level !== 'HIGH' && level !== 'CRITICAL') continue;
+    if (filters.priority !== 'All' && task.priority !== filters.priority) continue;
+    if (term && !standardContains(task.title, term) && !(task.notes && standardContains(task.notes, term))) continue;
+    const range = dateBucket(task, timeZone, now);
+    if (!ranges.has(range)) continue;
+    const bucket: TaskBucket = done ? 'completed' : range;
+    groups.set(bucket, [...(groups.get(bucket) ?? []), task]);
+  }
+  const far = Number.MAX_SAFE_INTEGER;
+  const byDate = (a: T, b: T) => (taskTime(a) ?? far) - (taskTime(b) ?? far) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const order = (a: T, b: T) => {
+    if (filters.sort === 'Priority') return (PRIORITY_ORDER[priorityOf(a)] ?? 2) - (PRIORITY_ORDER[priorityOf(b)] ?? 2) || byDate(a, b);
+    if (filters.sort === 'Title') return a.title.localeCompare(b.title, 'en-US', { numeric: true, sensitivity: 'base' }) || byDate(a, b);
+    return byDate(a, b);
+  };
+  const newestDone = (a: T, b: T) => (parseServerDate(b.completedAt ?? null) ?? taskTime(b) ?? 0) - (parseServerDate(a.completedAt ?? null) ?? taskTime(a) ?? 0);
+  return TASK_BUCKETS.flatMap((bucket) => {
+    const list = groups.get(bucket);
+    return list ? [{ bucket, tasks: [...list].sort(bucket === 'completed' && filters.sort === 'Due Date' ? newestDone : order) }] : [];
+  });
+}
+
+/** The five counts across the top of the page, from every task regardless of the filters. */
+export function taskStats(tasks: DashTask[], timeZone: string, now: number) {
+  const today = startOfDay(now, timeZone);
+  const weekAgo = now - 7 * 86_400_000;
+  const open = tasks.filter((task) => OPEN_STATUSES.has(task.status));
+  return {
+    total: open.length,
+    overdue: open.filter((task) => { const at = taskTime(task); return at !== null && at < today; }).length,
+    todo: open.filter((task) => task.status === 'INBOX' || task.status === 'PLANNED').length,
+    inProgress: open.filter((task) => task.status === 'IN_PROGRESS').length,
+    completed: tasks.filter((task) => task.status === 'COMPLETED' && (parseServerDate(task.completedAt ?? null) ?? 0) >= weekAgo).length,
+  };
+}
+
+/**
+ * This week (Monday to Sunday): how many tasks were completed, out of those plus the open tasks dated
+ * this week, and the completions on each day.
+ */
+export function weeklyProgress(tasks: DashTask[], timeZone: string, now: number) {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(new Date(now));
+  const todayIndex = Math.max(0, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(weekday));
+  const start = addDays(now, -todayIndex, timeZone);
+  const end = addDays(now, 7 - todayIndex, timeZone);
+  const days = Array.from({ length: 7 }, () => 0);
+  let completed = 0;
+  let open = 0;
+  for (const task of tasks) {
+    if (task.status === 'COMPLETED') {
+      const at = parseServerDate(task.completedAt ?? null);
+      if (at === null || at < start || at >= end) continue;
+      completed += 1;
+      for (let index = 6; index >= 0; index--) if (at >= addDays(start, index, timeZone)) { days[index] += 1; break; }
+    } else if (OPEN_STATUSES.has(task.status)) {
+      const at = taskTime(task);
+      if (at !== null && at >= start && at < end) open += 1;
+    }
+  }
+  const total = completed + open;
+  return { completed, total, percent: total ? Math.round((completed / total) * 100) : 0, days, todayIndex, start, end };
+}

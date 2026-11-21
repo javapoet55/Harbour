@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import { Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Folder as FolderIcon, FolderX, ListChecks, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Trash2, XCircle } from 'lucide-react';
 import { isDone, parseServerDate, standardContains } from '@/lib/task-query';
 import { FOLDER_COLOR_NAMES, FOLDER_PALETTE, FOLDER_SORTS, folderProgress, folderResults, folderTasks, NO_FOLDER_NAME, validFolderName, type Folder, type FolderSort } from '@/lib/task-list';
@@ -44,7 +45,7 @@ export function FolderList({ folders, tasks, loaded, error, onRetry, onOpen, onC
     <div className="nx-folder-title"><h2>Folders</h2><button type="button" className="nx-text-button" onClick={() => setAdding(true)}><Plus size={17} aria-hidden="true" />New Folder</button></div>
     {!loaded && !error && <p role="status" className="nx-status">Loading folders…</p>}
     {error && <p role="alert" className="nx-error">{error}{loaded && ' Showing saved folders.'}<button type="button" onClick={onRetry}>Retry</button></p>}
-    {loaded && !visible.length && !(search.trim() && showNone) && <div className="nx-status"><FolderIcon size={38} aria-hidden="true" /><h2>{search.trim() ? 'No matching folders' : 'Organize your tasks'}</h2><p>{search.trim() ? 'Try a different folder name.' : 'Create a folder to keep related tasks together.'}</p></div>}
+    {loaded && !visible.length && !(search.trim() && showNone) && <div className="nx-status">{search.trim() ? <FolderIcon size={38} aria-hidden="true" /> : <Image src="/tasks/folders.webp" alt="" width={150} height={118} className="tk-empty-art" />}<h2>{search.trim() ? 'No matching folders' : 'Organize your tasks'}</h2><p>{search.trim() ? 'Try a different folder name.' : 'Create a folder to keep related tasks together.'}</p></div>}
     {visible.length > 0 && <div className="nx-folder-grid">{visible.map((folder) => <button key={folder.id} type="button" className="nx-folder-card" style={{ '--folder': folder.color } as React.CSSProperties} onClick={() => onOpen(folder.id)} aria-label={`${folder.name}. Open: ${Math.max(0, folder.totalTaskCount - folder.completedTaskCount)}, Done: ${folder.completedTaskCount}. Opens folder tasks`}>
       <span><FolderBadge color={folder.color} /><ChevronRight size={16} aria-hidden="true" /></span>
       <strong>{folder.name}</strong>

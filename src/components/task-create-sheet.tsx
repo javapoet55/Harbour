@@ -13,11 +13,12 @@ const COMMON_DURATIONS = [15, 30, 45, 60];
  * folder, a Today / Tomorrow / Select Date choice and a time estimate. The start is the chosen day at
  * the current clock time, moved to the first opening that leaves 15 minutes around existing tasks.
  */
-export function TaskCreateSheet({ timeZone, tasks, folders, initialFolderId = null, onClose, onCreated, onVoice }: {
+export function TaskCreateSheet({ timeZone, tasks, folders, initialFolderId = null, initialTitle = '', onClose, onCreated, onVoice }: {
   timeZone: string;
   tasks: { status: string; startAt?: string | null; durationMin: number }[];
   folders: Folder[];
   initialFolderId?: string | null;
+  initialTitle?: string;
   onClose: () => void;
   onCreated: (title: string, scheduledAt: number) => void;
   onVoice?: () => void;
@@ -26,7 +27,7 @@ export function TaskCreateSheet({ timeZone, tasks, folders, initialFolderId = nu
   const nameInput = useRef<HTMLInputElement>(null);
   const submitting = useRef(false);
   const idempotencyKey = useRef('');
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialTitle);
   const [notes, setNotes] = useState('');
   const [notesOpen, setNotesOpen] = useState(false);
   const [folderId, setFolderId] = useState<string | null>(initialFolderId);

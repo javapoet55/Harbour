@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DISTANT_FUTURE } from './task-query';
 import {
   folderResults, folderTasks, lifeReminderLabel, moveTask, movingId, orderedTasks, parseTaskDisplayOrders, reorderTasks,
-  resolveCreationDate, sectionTitle, sortedIds, spacedCreationStart, taskRowIcon, taskSubtitle, validFolderName, type Folder,
+  DEFAULT_TASK_FILTERS, dateBucket, resolveCreationDate, sectionTitle, sortedIds, spacedCreationStart, taskRowIcon, taskSections, taskStats, taskSubtitle, validFolderName, weeklyProgress, type Folder, type TaskFilters,
 } from './task-list';
 
 const ZONE = 'Asia/Kolkata';
@@ -145,5 +145,66 @@ describe('folders', () => {
     expect(ids(folderTasks(tasks, 'p', '', 'Open', 'HIGH'))).toEqual(['c']);
     expect(ids(folderTasks(tasks, 'p', 'cal', 'Open', 'All'))).toEqual(['b']);
     expect(ids(folderTasks(tasks, null, '', 'Open', 'All'))).toEqual(['d']);
+  });
+});
+
+describe('tasks dashboard', () => {
+  // NOW is Wednesday 2026-09-16 09:00 in Asia/Kolkata.
+  const at = (day: string, time = '10:00') => new Date(`${day}T${time}:00+05:30`).toISOString();
+  const make = (id: string, startAt: string | null, extra: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, status: 'PLANNED', priority: 'NORMAL', startAt, dueAt: startAt, ...extra });
+  const tasks = [
+    make('late', at('2026-09-14')),
+    make('today', at('2026-09-16', '18:00')),
+    make('today-high', at('2026-09-16', '12:00'), { priority: 'HIGH' }),
+    make('tomorrow', at('2026-09-17')),
+    make('week', at('2026-09-21')),
+    make('later', at('2026-09-23')),
+    make('none', null, { notes: 'call the bank' }),
+    make('done', at('2026-09-15'), { status: 'COMPLETED', completedAt: at('2026-09-15', '11:00') }),
+    make('gone', at('2026-09-16'), { status: 'CANCELLED' }),
+  ];
+  const shape = (filters: Partial<TaskFilters>) => taskSections(tasks, { ...DEFAULT_TASK_FILTERS, ...filters }, ZONE, NOW).map((section) => [section.bucket, ids(section.tasks)]);
+
+  it('groups open tasks by when they fall and leaves cancelled ones out', () => {
+    expect(shape({})).toEqual([['overdue', ['late']], ['today', ['today-high', 'today']], ['tomorrow', ['tomorrow']], ['week', ['week']], ['later', ['later']], ['unscheduled', ['none']]]);
+  });
+
+  it('puts the seventh day ahead in Later, not This Week', () => {
+    expect(dateBucket({ startAt: at('2026-09-22', '23:59') }, ZONE, NOW)).toBe('week');
+    expect(dateBucket({ startAt: at('2026-09-23', '00:00') }, ZONE, NOW)).toBe('later');
+  });
+
+  it('narrows to the chip’s dates', () => {
+    expect(shape({ chip: 'Today' })).toEqual([['today', ['today-high', 'today']]]);
+    expect(shape({ chip: 'Tomorrow' })).toEqual([['tomorrow', ['tomorrow']]]);
+    expect(shape({ chip: 'This Week' }).map(([bucket]) => bucket)).toEqual(['today', 'tomorrow', 'week']);
+  });
+
+  it('filters by priority and status', () => {
+    expect(shape({ highPriority: true })).toEqual([['today', ['today-high']]]);
+    expect(shape({ status: 'Completed' })).toEqual([['completed', ['done']]]);
+    expect(shape({ status: 'All' }).at(-1)).toEqual(['completed', ['done']]);
+    expect(shape({ status: 'All', chip: 'Today' })).toEqual([['today', ['today-high', 'today']]]);
+  });
+
+  it('searches titles and notes across every date and status', () => {
+    expect(shape({ chip: 'Today', search: 'bank' })).toEqual([['unscheduled', ['none']]]);
+    expect(shape({ chip: 'Today', search: 'task done' })).toEqual([['completed', ['done']]]);
+  });
+
+  it('sorts within a section', () => {
+    expect(shape({ sort: 'Title' })[1]).toEqual(['today', ['today', 'today-high']]);
+    expect(shape({ sort: 'Priority' })[1]).toEqual(['today', ['today-high', 'today']]);
+  });
+
+  it('counts the page totals', () => {
+    expect(taskStats([...tasks, make('doing', at('2026-09-16'), { status: 'IN_PROGRESS' }), make('old', at('2026-08-01'), { status: 'COMPLETED', completedAt: at('2026-08-01') })], ZONE, NOW))
+      .toEqual({ total: 8, overdue: 1, todo: 7, inProgress: 1, completed: 1 });
+  });
+
+  it('measures the Monday-to-Sunday week', () => {
+    const progress = weeklyProgress(tasks, ZONE, NOW);
+    // Completed Tuesday; open this week: late (Mon), today x2, tomorrow. Next Monday and beyond are outside.
+    expect(progress).toMatchObject({ completed: 1, total: 5, percent: 20, todayIndex: 2, days: [0, 1, 0, 0, 0, 0, 0] });
   });
 });

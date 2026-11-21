@@ -7,12 +7,13 @@ import { jsonError } from '@/lib/http';
 async function healthHandlerGET() {
   try {
     const user = await requireUser();
-    const [tasks, projects, preference] = await Promise.all([
+    const [tasks, projects, preference, notes] = await Promise.all([
       prisma.task.findMany({ where: { userId: user.id, deletedAt: null }, include: { subtasks: true, recurrence: true, tags: { include: { tag: true } } }, orderBy: { createdAt: 'asc' } }),
       prisma.project.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { createdAt: 'asc' } }),
       prisma.userPreference.findUnique({ where: { userId: user.id } }),
+      prisma.note.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true, title: true, body: true, createdAt: true, updatedAt: true } }),
     ]);
-    return NextResponse.json({ exportedAt: new Date().toISOString(), profile: { name: user.name, email: user.email, timeZone: user.timeZone }, preference, projects, tasks });
+    return NextResponse.json({ exportedAt: new Date().toISOString(), profile: { name: user.name, email: user.email, timeZone: user.timeZone }, preference, projects, tasks, notes });
   } catch (error) { return jsonError(error); }
 }
 
