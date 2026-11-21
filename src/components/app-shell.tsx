@@ -6,7 +6,7 @@ import { NexdoLogo } from './nexdo-logo';
 import { useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  CalendarDays, CircleCheck, Home, LogOut, Settings, Sparkles, Sun, Plus, X,
+  CalendarDays, CircleCheck, Home, LogOut, Settings, ShoppingCart, Sparkles, Sun, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ const DESKTOP = [
   { href: '/', label: 'My Day', icon: Home },
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/shopping', label: 'Shopping', icon: ShoppingCart },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -62,7 +63,7 @@ export function AppShell({
         <nav className="side-nav" aria-label="Desktop">
           {DESKTOP.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('side-link', active && 'is-active')}>
                 <Icon className="size-5" aria-hidden />
@@ -95,7 +96,7 @@ export function AppShell({
         <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[var(--line)] bg-[color:var(--bg-elev)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_18px_rgba(31,36,48,0.08)] backdrop-blur md:hidden" aria-label="Mobile">
           {MOBILE.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link key={item.href} href={item.href} onClick={(event) => { if (item.href === '/voice') { event.preventDefault(); window.dispatchEvent(new Event('harbor:open-assistant')); } }} className={cn('flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[11px] font-medium', active ? 'bg-[var(--brand-soft)] text-[var(--brand)]' : 'text-[var(--muted)]')}>
                 <Icon className="size-5" strokeWidth={active ? 2.5 : 2} aria-hidden />
