@@ -6,7 +6,7 @@ import { NexdoLogo } from './nexdo-logo';
 import { useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  CalendarDays, CircleCheck, Home, LogOut, Settings, ShoppingCart, Sparkles, Sun, Plus, X,
+  CalendarDays, CalendarHeart, CircleCheck, Home, LogOut, Settings, ShoppingCart, Sparkles, Sun, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,7 @@ const DESKTOP = [
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/shopping', label: 'Shopping', icon: ShoppingCart },
+  { href: '/moments', label: 'Moments', icon: CalendarHeart },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
