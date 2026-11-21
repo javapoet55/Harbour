@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useFocusSession, FocusSessionControl } from './focus-session';
 import { FolderSelect } from './folder-select';
 import { lifeReminderLabel, type Folder } from '@/lib/task-list';
+import { DailyPlan } from './daily-plan';
 
 export function TodayBoard() {
   const [data, setData] = useState<AgendaPayload | null>(null);
@@ -135,6 +136,7 @@ export function TodayBoard() {
         <MyDayDashboard data={data} snapshot={snapshot.data} completedToday={completedToday.length} onOpenTask={setEditingTask} onComplete={complete} onReload={load}
           onStartFocus={(taskId, taskTitle) => { if (focusTaskId !== taskId || focusSeconds === 0) void focus.start(taskId, taskTitle); }} />
       </div>
+      <DailyPlan data={data} onChanged={load} />
       {editingTask ? <TaskDetailSheet task={editingTask} timeZone={data.timeZone} focusControl={<button type="button" className="harbor-btn w-full" onClick={() => toggleFocus(editingTask.id)}>{focusTaskId === editingTask.id ? `${focusRunning ? 'Pause' : 'Resume'} focus · ${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')}` : 'Start a 25-minute focus session'}</button>} onClose={() => setEditingTask(null)} onSaved={async () => { setEditingTask(null); await load(); }} onComplete={async () => { await complete(editingTask.id); setEditingTask(null); }} /> : null}
     </div>
   );
