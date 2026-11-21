@@ -3,6 +3,7 @@ const mocks=vi.hoisted(()=>({requireUser:vi.fn(),shoppingAction:vi.fn(),shopping
 vi.mock('@/server/auth',()=>({requireUser:mocks.requireUser}));
 vi.mock('@/server/shopping/service',()=>mocks);
 import {POST} from './route';
+vi.mock('@/server/ai-quota', () => ({ takeAiQuota: vi.fn(), refundAiQuota: vi.fn() })); // The daily quota has its own tests.
 beforeEach(()=>{vi.resetAllMocks();mocks.requireUser.mockResolvedValue({id:'owner'});mocks.shoppingAction.mockResolvedValue({list:{id:'list'}})});
 const req=(key:unknown)=>new Request('https://example.test/api/shopping',{method:'POST',body:JSON.stringify({operation:'create',input:{title:'Weekly'},idempotencyKey:key})});
 it('forwards a validated create idempotency key',async()=>{

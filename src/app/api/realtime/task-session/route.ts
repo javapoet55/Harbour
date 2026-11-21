@@ -1,4 +1,5 @@
 import { voiceAllowanceResponse } from '@/server/voice/usage';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { foodVoiceContextSchema, foodVoiceSessionConfiguration } from '@/server/voice/food';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
@@ -22,6 +23,7 @@ async function healthHandlerPOST(req: Request) {
     const model = session.model;
     const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
     if (allowance) return allowance;
+    await takeAiQuota(user, 'voice_tasks');
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -39,13 +41,14 @@ async function healthHandlerPOST(req: Request) {
         : response.status === 400
           ? 'Voice setup could not be completed. Please try again after the service is updated.'
           : 'Couldn’t connect to voice. Please try again shortly.';
+      await refundAiQuota(user, 'voice_tasks');
       return Response.json({ error }, { status: 502, headers });
     }
     const result = await response.json();
     if (typeof result.value !== 'string' || typeof result.expires_at !== 'number') throw new Error('Invalid session');
     return Response.json({ value: result.value, expiresAt: result.expires_at, model }, { headers });
   } catch (error) {
-    if (error instanceof Error && error.message === 'UNAUTHENTICATED') return jsonError(error);
+    if (error instanceof Error && ['UNAUTHENTICATED', 'AI_DAILY_LIMIT_REACHED', 'AI_QUOTA_UNAVAILABLE'].includes(error.message)) return jsonError(error);
     return Response.json({ error: 'Voice connection unavailable. Please try again later.' }, { status: 502, headers });
   }
 }

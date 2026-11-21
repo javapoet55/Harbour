@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { healthRoute, observedFetch } from '@/server/health/telemetry';
@@ -9,6 +10,7 @@ const inputSchema = z.object({ prompt: z.string().trim().min(1).max(4000), listN
 const answerSchema = z.object({ summary: z.string().min(1).max(1500), suggestions: z.array(z.string().min(1).max(600)).min(1).max(8) });
 const attempts = new Map<string, { start: number; count: number; busy: boolean }>();
 async function recommend(req: Request) {
+  let charged: { id: string; timeZone?: string | null } | null = null;
   try {
     const user = await requireUser();
     const parsed = inputSchema.safeParse(await req.json().catch(() => null));
@@ -20,6 +22,7 @@ async function recommend(req: Request) {
     for (const [id, usage] of attempts) if (now - usage.start > 3600000 && !usage.busy) attempts.delete(id);
     const usage = attempts.get(user.id) ?? { start: now, count: 0, busy: false };
     if (usage.busy || usage.count >= 30) return Response.json({ error: 'Please wait before requesting more recommendations.' }, { status: 429, headers });
+    await takeAiQuota(user, 'shopping_suggestions'); charged = user;
     usage.count++; usage.busy = true; attempts.set(user.id, usage);
     try {
       const response = await observedFetch('https://api.openai.com/v1/responses', {
@@ -38,7 +41,9 @@ async function recommend(req: Request) {
       return Response.json({ transcript: parsed.data.prompt, spoken: [answer.summary, ...answer.suggestions].join('\n'), intent: { intent: 'UNKNOWN', confidence: 1, confirmationRequired: false, raw: parsed.data.prompt }, visual: { summary: answer.summary, sections: [{ title: 'Shopping suggestions', items: answer.suggestions }], tasks: [], appointments: [], overdue: [], next: '' }, voiceEnabled: user.preference?.voiceEnabled ?? true }, { headers });
     } finally { usage.busy = false; }
   } catch (error) {
-    if (error instanceof Error && error.message === 'UNAUTHENTICATED') return jsonError(error);
+    if (error instanceof Error && ['UNAUTHENTICATED', 'AI_DAILY_LIMIT_REACHED', 'AI_QUOTA_UNAVAILABLE'].includes(error.message)) return jsonError(error);
+    // The provider failed: give the use back.
+    if (charged) await refundAiQuota(charged, 'shopping_suggestions');
     return Response.json({ error: 'Shopping recommendations did not finish. Please try again.' }, { status: 502, headers });
   }
 }

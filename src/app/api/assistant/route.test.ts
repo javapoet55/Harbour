@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { POST } from './route';
 import { requireUser } from '@/server/auth';
 import { runConversationalAgent } from '@/server/conversational-agent';
+vi.mock('@/server/ai-quota', () => ({ takeAiQuota: vi.fn(), refundAiQuota: vi.fn() })); // The daily quota has its own tests.
 vi.mock('@/server/auth', () => ({ requireUser: vi.fn() }));
 vi.mock('@/server/conversational-agent', () => ({ runConversationalAgent: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
