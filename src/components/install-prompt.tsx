@@ -1,4 +1,16 @@
 'use client';
-import { useEffect, useState } from 'react';
-export function InstallPrompt() { const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null); const [shown, setShown] = useState(false); useEffect(() => { const onBefore = (e: Event) => { e.preventDefault(); setEvent(e as BeforeInstallPromptEvent); }; window.addEventListener('beforeinstallprompt', onBefore); return () => window.removeEventListener('beforeinstallprompt', onBefore); }, []); if (!event || shown) return null; return <div className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--bg-elev)] p-4 text-sm shadow-xl"><span><strong className="block">Install Nexdo</strong><span className="text-[var(--muted)]">Keep your day one tap away.</span></span><button className="harbor-btn harbor-btn-brand" onClick={async () => { await event.prompt(); setShown(true); }}>Install</button><button className="text-[var(--muted)]" onClick={() => setShown(true)} aria-label="Dismiss install prompt">×</button></div>; }
+import { useEffect } from 'react';
+/**
+ * The "Install Nexdo" banner is hidden on the web app for now. The component still cancels the
+ * browser's own install prompt so that does not appear in its place; the browser menu's Install
+ * option keeps working.
+ */
+export function InstallPrompt() {
+  useEffect(() => {
+    const onBefore = (event: Event) => event.preventDefault();
+    window.addEventListener('beforeinstallprompt', onBefore);
+    return () => window.removeEventListener('beforeinstallprompt', onBefore);
+  }, []);
+  return null;
+}
 declare global { interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>; } }

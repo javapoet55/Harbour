@@ -20,7 +20,8 @@
   border-radius: 28px;
   min-height: 70dvh;
 }
-@media (min-width: 768px) { .nx-tasks { margin: 0; padding: 28px 32px 32px; } }
+/* On a wide screen the card sits in the middle of the page, in line with the Ask Nexdo bar below it. */
+@media (min-width: 768px) { .nx-tasks { max-width: 920px; margin: 0 auto; padding: 28px 32px 32px; } }
 .nx-tasks button:disabled { opacity: .5; cursor: default; }
 .nx-tasks :is(button, input, select, textarea, a):focus-visible,
 .nx-sheet :is(button, input, select, textarea, a):focus-visible { outline: 3px solid #6d5dfc; outline-offset: 2px; }
@@ -40,7 +41,7 @@
 .nx-search input { flex: 1; min-width: 0; min-height: 44px; background: transparent; outline: none; font-size: 16px; color: var(--nx-ink); }
 .nx-search button { display: grid; place-items: center; width: 44px; height: 44px; color: var(--nx-secondary); }
 
-.nx-create { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.nx-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .nx-create button { display: flex; align-items: center; gap: 10px; min-height: 72px; padding: 12px; text-align: left; border-radius: 20px; border: 1px solid var(--nx-line); background: rgb(255 255 255 / .7); }
 .nx-create button.is-voice { background: rgb(61 41 240 / .05); }
 .nx-create .nx-create-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; color: var(--nx-blue); background: rgb(5 148 245 / .15); }

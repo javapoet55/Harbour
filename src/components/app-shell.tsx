@@ -6,7 +6,7 @@ import { NexdoLogo } from './nexdo-logo';
 import { useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BarChart3, Bell, CalendarDays, CircleCheck, CreditCard, Download, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus, X,
+  Bell, CalendarDays, CircleCheck, CreditCard, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -14,17 +14,16 @@ import { FocusSessionProvider, FocusSessionBanner } from './focus-session';
 import { OfflineBanner } from './offline-banner';
 import { InstallPrompt } from './install-prompt';
 
+// AI Planner, Insights and Import and export are hidden from the web menus for now. Their pages
+// (/planner, /insights, /import-export) still exist and open by address.
 const DESKTOP = [
   { href: '/', label: 'My Day', icon: Sun },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/waiting', label: 'Waiting For', icon: Timer },
-  { href: '/planner', label: 'AI Planner', icon: Sparkles },
-  { href: '/insights', label: 'Insights', icon: BarChart3 },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/billing', label: 'Plans and billing', icon: CreditCard },
-  { href: '/import-export', label: 'Import and export', icon: Download },
   { href: '/settings', label: 'Settings', icon: MoreHorizontal },
 ];
 

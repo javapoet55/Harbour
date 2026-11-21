@@ -30,7 +30,7 @@ No server changes were needed. The web uses the same endpoints as the phone: `GE
 |---|---|---|
 | "Tasks — Turn intent into action." header, filter and search buttons | Different header, always-on search | Same |
 | Tasks / Folders switch | Missing | Same |
-| Add by Voice / Add Manually cards | One "Add a task" link | Same cards. Add by Voice opens the web Ask AI voice dock (see "Left to do") |
+| Add by Voice / Add Manually cards | One "Add a task" link | Add Manually only. Add by Voice is hidden on the web (see "Left to do") |
 | Today / Tomorrow / This Week / All pills with counts | Pills without counts, different order | Same, counts from the same pass as the list |
 | All: history range (All time, Last 2 weeks, This Month, Last Month) | Missing | Same |
 | Day sections (Today, Yesterday, Tomorrow, date, Unscheduled) with item counts | Flat list | Same |
@@ -53,8 +53,8 @@ No server changes were needed. The web uses the same endpoints as the phone: `GE
 ## Left to do
 
 - **Add by Voice.** The phone runs a live voice session that creates the task (`AddTaskByVoiceView`,
-  `/api/realtime/task-session`). The web has no live voice transport yet, so the card opens the existing
-  Ask AI voice dock. This belongs with the web real-time voice work.
+  `/api/realtime/task-session`). The web has no live voice transport yet, so the Add by Voice card and
+  the voice button in Create New Task are hidden. This belongs with the web real-time voice work.
 - **Moments in the task list.** The phone shows birthdays and other Moments as all-day rows on their
   day. The web has no Moments module yet; add the rows when it is built.
 - **Nexdo Action card** (call, message or email a contact from a task: `TaskActionCard`,
@@ -70,6 +70,17 @@ No server changes were needed. The web uses the same endpoints as the phone: `GE
   pages still use the old list (`src/components/task-browser.tsx`) and keep bulk actions.
 - Task Details now sends the schedule update only when the date, time or estimate changed. It used to
   resend the schedule on every save.
+
+## Web-only decisions (Nov 20, 2026)
+
+These apply to the web app only, not to the phone apps:
+
+- AI Planner, Insights and Import and export are hidden from the side menu and the mobile More menu.
+  The pages still open by address.
+- The microphone in the Ask Nexdo bar and its "Voice is …" line are hidden (`SHOW_MIC` in
+  `src/components/voice-dock.tsx`).
+- The "Install Nexdo" banner is hidden (`src/components/install-prompt.tsx`).
+- The Tasks card is centred on wide screens.
 
 ## Tests
 

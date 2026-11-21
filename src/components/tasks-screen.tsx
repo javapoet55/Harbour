@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Circle, FileText, Folder as FolderIcon, Laptop, ListChecks, Mail, Mic, Phone, Plus, Search, SlidersHorizontal, Wrench, XCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Circle, FileText, Folder as FolderIcon, Laptop, ListChecks, Mail, Phone, Plus, Search, SlidersHorizontal, Wrench, XCircle } from 'lucide-react';
 import { scheduleFetch } from '@/lib/schedule-fetch';
 import type { AgendaTask } from '@/lib/types';
 import {
@@ -219,7 +219,6 @@ export function TasksScreen() {
       </label>}
 
       <div className="nx-create">
-        <button type="button" className="is-voice" aria-label="Add by Voice" onClick={() => window.dispatchEvent(new Event('harbor:open-assistant'))}><span className="nx-create-icon"><Mic size={22} aria-hidden="true" /></span><span><strong>Add by Voice</strong><small>Tap and speak</small></span></button>
         <button type="button" aria-label="Add Manually" disabled={!timeZone} onClick={() => setCreating({ folderId: null })}><span className="nx-create-icon"><Plus size={24} aria-hidden="true" /></span><span><strong>Add Manually</strong><small>Type a task</small></span></button>
       </div>
 
@@ -300,7 +299,6 @@ export function TasksScreen() {
 
     {creating && timeZone && <TaskCreateSheet timeZone={timeZone} tasks={tasks} folders={folders} initialFolderId={creating.folderId}
       onClose={() => setCreating(null)}
-      onVoice={() => { setCreating(null); window.dispatchEvent(new Event('harbor:open-assistant')); }}
       onCreated={(title, scheduledAt) => {
         setCreating(null);
         if (tab === 'tasks') {
