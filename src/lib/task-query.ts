@@ -1,0 +1,331 @@
+/**
+ * The fields the query reads. Any task shape the web app loads satisfies it.
+ */
+export type QueryTask = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  notes?: string | null;
+  startAt?: string | null;
+  dueAt?: string | null;
+  durationMin?: number;
+};
+
+/**
+ * Web port of `ios/Sources/NexdoCore/TaskQuery.swift`, taken from the Android port in
+ * `mobile/src/lib/taskQuery.ts` so the three apps filter, count and section tasks the same way.
+ *
+ * Swift loads every task once and filters on the device, so this runs over the whole array on each
+ * render. It is written as one pass that produces the selected list, the day sections AND the count
+ * for every date pill together, exactly as `snapshot(_:timeZone:now:calendar:)` does — the pill counts
+ * must come from the same filtered pass, or a pill would disagree with the list it opens.
+ *
+ * Dates are compared as epoch milliseconds throughout. The only calendar arithmetic that needs a real
+ * time zone is "which day is this instant in", which `dayKey` does through `Intl.DateTimeFormat`.
+ */
+
+/** `TaskDateFilter` (TaskQuery.swift:10-22). Raw values are the pill labels. */
+export const TASK_DATE_FILTERS = ['Today', 'Tomorrow', 'This Week', 'All'] as const;
+export type TaskDateFilter = (typeof TASK_DATE_FILTERS)[number];
+
+/** `TaskDateFilter.emptyTitle` (TaskQuery.swift:13-21). */
+export const DATE_FILTER_EMPTY_TITLE: Record<TaskDateFilter, string> = {
+  All: 'You’re all caught up',
+  Today: 'Nothing scheduled for today',
+  Tomorrow: 'Nothing scheduled for tomorrow',
+  'This Week': 'Your week is clear',
+};
+
+/** `TaskHistoryRange` (TaskQuery.swift:24-42), in Swift's `allCases` order. */
+export const TASK_HISTORY_RANGES = ['All time', 'Last 2 weeks', 'This Month', 'Last Month'] as const;
+export type TaskHistoryRange = (typeof TASK_HISTORY_RANGES)[number];
+
+/** `TaskQuery` (TaskQuery.swift:44-51). */
+export type TaskQuery = {
+  date: TaskDateFilter;
+  search: string;
+  status: 'Open' | 'Completed' | 'All';
+  priority: string;
+  earliestFirst: boolean;
+  historyRange: TaskHistoryRange;
+};
+
+export const DEFAULT_TASK_QUERY: TaskQuery = {
+  date: 'Today',
+  search: '',
+  status: 'Open',
+  priority: 'All',
+  earliestFirst: true,
+  historyRange: 'This Month',
+};
+
+export type TaskResultSection<T extends QueryTask = QueryTask> = {
+  /** `TaskResultSection.id` (TaskQuery.swift:4): the day and the done-ness together. */
+  id: string;
+  /** Start of the section's day, epoch ms, or `DISTANT_FUTURE` for unscheduled. */
+  date: number;
+  isDone: boolean;
+  tasks: T[];
+};
+
+export type TaskListSnapshot<T extends QueryTask = QueryTask> = {
+  tasks: T[];
+  sections: TaskResultSection<T>[];
+  counts: Record<TaskDateFilter, number>;
+};
+
+/** `Date.distantFuture`, the sort key Swift gives an unscheduled task (TaskQuery.swift:97). */
+export const DISTANT_FUTURE = 64092211200000;
+
+export type Interval = { start: number; end: number };
+
+/** `task.isDone` (Models.swift:47). */
+export function isDone(task: Pick<QueryTask, 'status'>): boolean {
+  return task.status === 'COMPLETED';
+}
+
+const YMD = new Map<string, Intl.DateTimeFormat>();
+
+function ymdFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = YMD.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    YMD.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+/** The calendar day an instant falls on, in the account's zone, as `yyyy-mm-dd`. */
+export function dayKey(at: number, timeZone: string): string {
+  try {
+    return ymdFormatter(timeZone).format(new Date(at));
+  } catch {
+    // An unknown zone identifier falls back to the device zone, as `TimeZone(identifier:) ?? .current`.
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(at));
+  }
+}
+
+/** The zone's UTC offset in ms at a given instant. */
+function zoneOffset(at: number, timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(new Date(at));
+    const get = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - at;
+  } catch {
+    return -new Date(at).getTimezoneOffset() * 60_000;
+  }
+}
+
+/** Midnight at the start of the day containing `at`, in the account's zone, as epoch ms. */
+export function startOfDay(at: number, timeZone: string): number {
+  const [year, month, day] = dayKey(at, timeZone).split('-').map(Number);
+  const utcMidnight = Date.UTC(year, month - 1, day);
+  // The offset one hour into the day avoids reading a transition that lands exactly on midnight.
+  const candidate = utcMidnight - zoneOffset(utcMidnight + 3_600_000, timeZone);
+  // A day that starts by springing forward has no 00:00; the first real instant is the transition.
+  return dayKey(candidate, timeZone) === dayKey(at, timeZone) ? candidate : candidate + 3_600_000;
+}
+
+/** Midnight `days` away from the day containing `at`. */
+export function addDays(at: number, days: number, timeZone: string): number {
+  const [year, month, day] = dayKey(at, timeZone).split('-').map(Number);
+  // Noon keeps the arithmetic clear of both DST edges before the day is re-derived.
+  return startOfDay(Date.UTC(year, month - 1, day + days, 12), timeZone);
+}
+
+/** The day interval containing `at`: `calendar.dateInterval(of: .day, for:)`. */
+export function dayInterval(at: number, timeZone: string): Interval {
+  const start = startOfDay(at, timeZone);
+  return { start, end: addDays(start, 1, timeZone) };
+}
+
+/**
+ * The week interval containing `at`. Swift sets `firstWeekday = 2` (TaskQuery.swift:76), so weeks run
+ * Monday to Sunday regardless of the device locale.
+ */
+export function weekInterval(at: number, timeZone: string): Interval {
+  const start = startOfDay(at, timeZone);
+  const [year, month, day] = dayKey(start, timeZone).split('-').map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = Sunday
+  const backToMonday = (weekday + 6) % 7;
+  const monday = addDays(start, -backToMonday, timeZone);
+  return { start: monday, end: addDays(monday, 7, timeZone) };
+}
+
+/** The month interval containing `at`. */
+export function monthInterval(at: number, timeZone: string): Interval {
+  const [year, month] = dayKey(at, timeZone).split('-').map(Number);
+  const start = startOfDay(Date.UTC(year, month - 1, 1, 12), timeZone);
+  const end = startOfDay(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1, 12), timeZone);
+  return { start, end };
+}
+
+/** `TaskHistoryRange.interval(now:calendar:)` (TaskQuery.swift:27-41). */
+export function historyInterval(range: TaskHistoryRange, now: number, timeZone: string): Interval {
+  const today = startOfDay(now, timeZone);
+  switch (range) {
+    case 'All time':
+      // `DateInterval(start: .distantPast, end: .distantFuture)` (:31-32). The end is exclusive, so an
+      // unscheduled task (keyed at `DISTANT_FUTURE`) is NOT in it; `allDateSearch` admits it instead.
+      return { start: Number.NEGATIVE_INFINITY, end: DISTANT_FUTURE };
+    case 'Last 2 weeks':
+      return { start: addDays(today, -13, timeZone), end: addDays(today, 1, timeZone) };
+    case 'This Month':
+      return monthInterval(now, timeZone);
+    case 'Last Month': {
+      const thisMonth = monthInterval(now, timeZone);
+      return { start: monthInterval(thisMonth.start - 1, timeZone).start, end: thisMonth.start };
+    }
+  }
+}
+
+/**
+ * `String.localizedStandardContains` — case- and diacritic-insensitive containment. `Intl.Collator`
+ * with `sensitivity: 'base'` gives the same equivalence but has no substring form, so this folds both
+ * sides and uses `includes`.
+ */
+export function standardContains(haystack: string, needle: string): boolean {
+  return fold(haystack).includes(fold(needle));
+}
+
+function fold(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('en-US');
+}
+
+/** ISO-8601 with or without fractional seconds, as Swift tries both formatters (TaskQuery.swift:88-90). */
+export function parseServerDate(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : at;
+}
+
+/**
+ * `TaskQuery.snapshot` (TaskQuery.swift:71-127). One pass builds the counts for every pill and the
+ * selected list; only the selected list is sorted and sectioned.
+ */
+export function snapshot<T extends QueryTask>(query: TaskQuery, tasks: T[], timeZone: string, now: number = Date.now()): TaskListSnapshot<T> {
+  const tomorrow = addDays(startOfDay(now, timeZone), 1, timeZone);
+  const intervals: Record<TaskDateFilter, Interval> = {
+    All: historyInterval(query.historyRange, now, timeZone),
+    Today: dayInterval(now, timeZone),
+    Tomorrow: dayInterval(tomorrow, timeZone),
+    'This Week': weekInterval(now, timeZone),
+  };
+  const term = query.search.trim();
+  const counts: Record<TaskDateFilter, number> = { Today: 0, Tomorrow: 0, 'This Week': 0, All: 0 };
+  const selected: { task: T; date: number }[] = [];
+
+  for (const task of tasks) {
+    if (task.status === 'CANCELLED') continue;
+    const done = isDone(task);
+    if (!(query.status === 'All' || (query.status === 'Completed' ? done : !done))) continue;
+    if (!(query.priority === 'All' || task.priority === query.priority)) continue;
+    if (term.length > 0 && !standardContains(task.title, term) && !standardContains(task.notes ?? '', term)) continue;
+
+    const scheduled = parseServerDate(task.startAt ?? task.dueAt) ?? DISTANT_FUTURE;
+    for (const filter of TASK_DATE_FILTERS) {
+      const interval = intervals[filter];
+      const inHistory = scheduled >= interval.start && scheduled < interval.end;
+      const upcomingOpen = filter === 'All' && query.historyRange !== 'This Month' && !done && scheduled >= tomorrow;
+      // `allDateSearch` (TaskQuery.swift:110-111): All time, or any search term, spans every date.
+      const allDateSearch = filter === 'All' && (query.historyRange === 'All time' || term.length > 0);
+      if (!inHistory && !upcomingOpen && !allDateSearch) continue;
+      counts[filter] += 1;
+      if (filter === query.date) selected.push({ task, date: scheduled });
+    }
+  }
+
+  selected.sort((lhs, rhs) => {
+    const leftDone = isDone(lhs.task);
+    const rightDone = isDone(rhs.task);
+    // Open work first, whatever the date ordering.
+    if (leftDone !== rightDone) return leftDone ? 1 : -1;
+    if (lhs.date === rhs.date) return lhs.task.id < rhs.task.id ? -1 : lhs.task.id > rhs.task.id ? 1 : 0;
+    if (query.date === 'All') {
+      // History reads newest-first, but anything still ahead of you is listed before it, soonest first.
+      const leftUpcoming = lhs.date >= tomorrow;
+      const rightUpcoming = rhs.date >= tomorrow;
+      if (leftUpcoming !== rightUpcoming) return leftUpcoming ? -1 : 1;
+      return leftUpcoming ? lhs.date - rhs.date : rhs.date - lhs.date;
+    }
+    return query.earliestFirst ? lhs.date - rhs.date : rhs.date - lhs.date;
+  });
+
+  const sections: TaskResultSection<T>[] = [];
+  let current: TaskResultSection<T> | null = null;
+  for (const item of selected) {
+    const day = item.date === DISTANT_FUTURE ? DISTANT_FUTURE : startOfDay(item.date, timeZone);
+    const done = isDone(item.task);
+    if (!current || current.date !== day || current.isDone !== done) {
+      current = { id: `${done}-${day}`, date: day, isDone: done, tasks: [] };
+      sections.push(current);
+    }
+    current.tasks.push(item.task);
+  }
+
+  return { tasks: selected.map((item) => item.task), sections, counts };
+}
+
+/**
+ * `TaskQuery.beginSearch()` (TaskQuery.swift:53-60): a keyword search across all dates, priorities and
+ * completion states. `earliestFirst` is left as it is.
+ */
+export function beginSearch(query: TaskQuery): TaskQuery {
+  return { ...query, ...SEARCH_FILTERS, search: '' };
+}
+
+/**
+ * Choosing a date chip (RootView.swift:1789). Moving to All from another chip narrows it to this month's open tasks,
+ * but not during a search. Android ahead of iOS, as `TaskQuery.selectDate` on fix/ios-bug-pass (7fbc8f9): Today then
+ * All used to reset a search's status to Open and hide its completed matches.
+ */
+export function selectDate(query: TaskQuery, date: TaskDateFilter, searching: boolean): TaskQuery {
+  if (date === 'All' && query.date !== 'All' && !searching) return { ...query, date, historyRange: 'This Month', status: 'Open' };
+  return { ...query, date };
+}
+
+/** The filters `beginSearch` resets, at the values it sets. */
+const SEARCH_FILTERS = { date: 'All', historyRange: 'All time', status: 'All', priority: 'All' } as const satisfies Partial<TaskQuery>;
+export type SearchFilters = Pick<TaskQuery, keyof typeof SEARCH_FILTERS>;
+
+export function searchFilters(query: TaskQuery): SearchFilters {
+  return { date: query.date, historyRange: query.historyRange, status: query.status, priority: query.priority };
+}
+
+/**
+ * Closing search. Android ahead of iOS: Swift only clears the term, so the list stays on All / All time / All
+ * statuses after a search. Each filter `beginSearch` reset goes back to what it was before, unless the person
+ * changed it during the search.
+ */
+export function endSearch(query: TaskQuery, before: SearchFilters | null): TaskQuery {
+  const restored: Partial<TaskQuery> = {};
+  if (before) {
+    for (const key of Object.keys(SEARCH_FILTERS) as (keyof SearchFilters)[]) {
+      if (query[key] === SEARCH_FILTERS[key]) Object.assign(restored, { [key]: before[key] });
+    }
+  }
+  return { ...query, ...restored, search: '' };
+}
+
+/**
+ * `TaskQuery.revealCreatedTask` (TaskQuery.swift:55-64): after a create, move the list to the day the
+ * task landed on and drop the filters that would hide it.
+ */
+export function revealCreatedTask(query: TaskQuery, scheduledAt: number | null, timeZone: string, now: number = Date.now()): TaskQuery {
+  const selected = scheduledAt ?? now;
+  const selectedDay = dayKey(selected, timeZone);
+  const tomorrow = addDays(startOfDay(now, timeZone), 1, timeZone);
+  const date: TaskDateFilter =
+    selectedDay === dayKey(now, timeZone) ? 'Today' : selectedDay === dayKey(tomorrow, timeZone) ? 'Tomorrow' : 'All';
+  return { ...query, date, search: '', status: 'Open', priority: 'All' };
+}
