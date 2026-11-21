@@ -17,7 +17,7 @@
 .au-frame {
   width: 100%;
   max-width: 1180px;
-  min-height: min(760px, calc(100dvh - 2 * clamp(12px, 3vw, 40px)));
+  min-height: min(760px, calc(100dvh - 2 * clamp(12px, 3vw, 40px) - 64px));
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(400px, 470px);
   overflow: hidden;
@@ -37,6 +37,11 @@
   overflow: hidden;
   background: linear-gradient(180deg, #fdfcff 0%, #f6f1ff 100%);
 }
+/* Room above the card for the page-corner logo (it hides below 920px). */
+.au { position: relative; padding-top: calc(clamp(16px, 2.4vw, 32px) + 64px); }
+.au-site-logo { position: absolute; top: clamp(16px, 2.4vw, 32px); left: clamp(16px, 2.4vw, 36px); display: block; width: 150px; border-radius: 10px; mix-blend-mode: multiply; }
+.au-site-logo .nexdo-logo { display: block; width: 150px; height: auto; }
+.au-site-logo:focus-visible, .au-brand:focus-visible { outline: 2px solid var(--au-violet); outline-offset: 4px; }
 .au-brand { display: block; width: 168px; }
 .au-brand .nexdo-logo { width: 168px; height: auto; mix-blend-mode: multiply; }
 .au-aside h1 { margin-top: 44px; font-size: clamp(30px, 3.3vw, 42px); font-weight: 800; line-height: 1.08; letter-spacing: -0.03em; }
@@ -126,6 +131,8 @@ button.au-link:disabled { color: #8f8aa8; cursor: default; text-decoration: none
 }
 @media (max-width: 920px) {
   .au { place-items: start center; }
+  .au-site-logo { display: none; }
+  .au { padding-top: clamp(12px, 3vw, 40px); }
   .au-frame { grid-template-columns: minmax(0, 1fr); max-width: 560px; min-height: 0; border-radius: 28px; }
   .au-aside { padding: 28px 28px 132px; }
   .au-aside h1 { margin-top: 22px; font-size: clamp(26px, 6.4vw, 34px); }
