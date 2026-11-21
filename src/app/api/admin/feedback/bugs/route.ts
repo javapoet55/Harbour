@@ -6,9 +6,15 @@ import { bugReportStatuses, closedBugReportStatuses } from '@/server/feedback/bu
 import { bugSchema } from '@/server/feedback/bugs';
 import { healthRoute } from '@/server/health/telemetry';
 
+const webTicket = z.object({ platform: z.literal('web'), category: z.string().max(20), page: z.string().max(200), browser: z.string().max(60) }).passthrough();
+
 function parseMetadata(value: string) {
   try {
-    const parsed = bugSchema.shape.metadata.safeParse(JSON.parse(value));
+    const raw = JSON.parse(value);
+    // Web support-chat tickets fill the same columns: App shows "Web · category", Device shows the browser.
+    const web = webTicket.safeParse(raw);
+    if (web.success) return { appVersion: 'web', buildNumber: web.data.page, deviceModel: web.data.browser, iosVersion: '', screen: `Web · ${web.data.category}`, platform: 'web' as const };
+    const parsed = bugSchema.shape.metadata.safeParse(raw);
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

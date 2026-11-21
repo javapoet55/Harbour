@@ -22,24 +22,34 @@ export function bugReportMessage(input: {
     const url = new URL(input.screenshotUrl ?? '');
     if (url.protocol === 'https:' && !url.username && !url.password) screenshotUrl = url.href;
   } catch { /* No valid protected screenshot link. */ }
+  const web = metadata.platform === 'web';
+  const categories: Record<string, string> = { bug: 'Something isn’t working', account: 'Account or sign-in', billing: 'Billing or plan', feature: 'Feature request', question: 'Question', other: 'Other' };
+  const details = web ? [
+    { label: 'Source', value: 'Web app support chat' },
+    { label: 'Category', value: categories[value('category')] ?? 'Other' },
+    { label: 'Page', value: value('page') },
+    { label: 'Browser', value: value('browser') },
+    { label: 'Reported at (UTC)', value: received },
+    { label: 'Correlation ID', value: value('correlationID') },
+  ] : [
+    { label: 'App version', value: value('appVersion') },
+    { label: 'Build number', value: value('buildNumber') },
+    { label: 'Device model', value: value('deviceModel') },
+    { label: 'iOS version', value: value('iosVersion') },
+    { label: 'App screen', value: value('screen') },
+    { label: 'Reported at (UTC)', value: received },
+    { label: 'Correlation ID', value: value('correlationID') },
+  ];
   return {
-    subject: `NexDo bug report ${input.reference}`,
+    subject: `NexDo ${web ? 'support ticket' : 'bug report'} ${input.reference}`,
     ...renderEmail({
-      heading: 'New bug report',
+      heading: web ? 'New support ticket' : 'New bug report',
       subheading: `Reference ID · ${input.reference}`,
-      preheader: `Bug report ${input.reference} is ready for review.`,
-      intro: 'A user reported an issue in NexDo. Review the description and diagnostic details below.',
+      preheader: `${web ? 'Support ticket' : 'Bug report'} ${input.reference} is ready for review.`,
+      intro: web ? 'A signed-in user created a support ticket from the web app’s support chat. Review the ticket below; reply through the admin portal or the user’s account email.' : 'A user reported an issue in NexDo. Review the description and diagnostic details below.',
       sections: [
-        { title: 'What happened', items: [input.description] },
-        { title: 'Diagnostic details', items: [], details: [
-          { label: 'App version', value: value('appVersion') },
-          { label: 'Build number', value: value('buildNumber') },
-          { label: 'Device model', value: value('deviceModel') },
-          { label: 'iOS version', value: value('iosVersion') },
-          { label: 'App screen', value: value('screen') },
-          { label: 'Reported at (UTC)', value: received },
-          { label: 'Correlation ID', value: value('correlationID') },
-        ] },
+        { title: web ? 'Ticket' : 'What happened', items: [input.description] },
+        { title: 'Diagnostic details', items: [], details },
         { title: 'Screenshot', items: [screenshotUrl
           ? 'Included with user consent. Authorized support sign-in is required. Screenshots expire 7 days after submission.'
           : 'No screenshot is available for this report.'] },
