@@ -64,3 +64,14 @@ Admin sessions last 8 hours at most and end after 60 idle minutes (`ADMIN_SESSIO
 ### Penetration test
 
 See [security-pentest-brief.md](security-pentest-brief.md) for the scope to hand an outside tester.
+
+## Sign-in attempt limits
+
+`POST /api/auth/login` counts every attempt before the password is checked (`limitLogin` in `src/server/signup/abuse.ts`, the same durable `AuthRateBucket` store as signup and codes):
+
+- **Per account:** 10 attempts per 15 minutes, keyed on the trimmed, lower-cased email. A correct password clears the count, so a real customer never builds it up. An email with no account is counted the same way, so the 429 does not reveal whether an account exists.
+- **Per address:** 60 attempts per 15 minutes from one address (wide on purpose: offices and mobile carriers share addresses). Needs `AUTH_TRUSTED_IP_HEADER`; without a readable address only the account limit applies.
+- Over a limit the answer is `429 Too many attempts. Please try again later.` and no password is checked.
+- **Trade-off:** someone who knows a customer's email can use up that account's 10 attempts and make real sign-ins wait up to 15 minutes. That is the usual price of an account limit; the alternative (no limit) lets passwords be guessed without end.
+- **If the limiter cannot run** (`SIGNUP_ABUSE_SECRET` missing, the database unavailable, no readable address) sign-in is not blocked, because that would lock every customer out. It logs `login_rate_limiter_unavailable` at error level: alert on it. Both variables are set on Develop; confirm them on Stage and Production before promoting.
+- Limits are `LOGIN_LIMITS` in `abuse.ts`. Not covered: Sign in with Apple (token based), the admin app (email code, its own limits), and change-password (needs a live session).

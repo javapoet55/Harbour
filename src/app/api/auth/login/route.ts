@@ -7,12 +7,18 @@ import { login } from '@/server/auth';
 import { writeSession } from '@/server/session';
 import { jsonError } from '@/lib/http';
 import { isAdminEmail } from '@/server/admin-auth';
+import { clearLoginFailures, limitLogin } from '@/server/signup/abuse';
 
 async function healthHandlerPOST(req: Request) {
   try {
   const body = await req.json().catch(() => ({}));
-  const user = await login(String(body.email ?? ''), String(body.password ?? ''));
+  const email = String(body.email ?? '');
+  // Count the attempt before any password work; too many in a window is a 429 whether or not the account exists.
+  await limitLogin(req, email);
+  const user = await login(email, String(body.password ?? ''));
   if (!user) return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
+  // The right password: the failed-attempt count starts over.
+  await clearLoginFailures(email);
   if (!user.emailVerifiedAt) {
     return NextResponse.json({ code: 'EMAIL_NOT_VERIFIED', verificationProof: signupProof(user), error: 'Verify your email address to sign in.', email: user.email }, { status: 403 });
   }

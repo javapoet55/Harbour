@@ -49,6 +49,42 @@ export async function consumeLimit(scope: string, identity: string, limit: numbe
     log('warn', 'signup_rate_store_unavailable'); throw new Error('SIGNUP_SECURITY_UNAVAILABLE');
   }
 }
+/** Forgets a bucket, e.g. the failed-sign-in count once the right password is given. */
+export async function clearLimit(scope: string, identity: string) {
+  await prisma.authRateBucket.deleteMany({ where: { key: securityRef(`${scope}:${identity}`) } });
+}
+
+/**
+ * Sign-in attempts per window. The account limit is the one that stops password guessing, wherever the guesses
+ * come from; it is cleared by a correct password so a real customer never builds it up. The address limit is
+ * wide on purpose (offices and mobile carriers share addresses) and stops one source from trying many accounts.
+ */
+export const LOGIN_LIMITS = { account: 10, address: 60 };
+const loginAccount = (email: string) => email.trim().toLowerCase().slice(0, 254);
+
+/**
+ * Counts a sign-in attempt before the password is checked and refuses it with AUTH_RATE_LIMITED when over a limit.
+ * The answer is the same whether or not the account exists. If the limiter itself cannot run (not configured,
+ * store down) sign-in is not blocked, because that would lock every customer out; it is logged as an error.
+ */
+export async function limitLogin(req: Request, email: string) {
+  const attempt = async (scope: string, identity: string, limit: number) => {
+    try { await consumeLimit(scope, identity, limit); }
+    catch (e) {
+      if (e instanceof Error && e.message === 'SIGNUP_SECURITY_UNAVAILABLE') { log('error', 'login_rate_limiter_unavailable', { scope }); return; }
+      throw e;
+    }
+  };
+  await attempt('login-account', loginAccount(email), LOGIN_LIMITS.account);
+  let address: string | null = null;
+  try { address = clientAddress(req); } catch { log('error', 'login_rate_limiter_unavailable', { scope: 'login-address' }); }
+  if (address) await attempt('login-address', address, LOGIN_LIMITS.address);
+}
+
+/** Called after a correct password. */
+export async function clearLoginFailures(email: string) {
+  try { await clearLimit('login-account', loginAccount(email)); } catch { log('warn', 'login_rate_clear_failed'); }
+}
 export async function limitAuthRequest(req: Request, action: 'signup' | 'send' | 'verify') {
   await consumeLimit(`signup-ip:${action}`, clientAddress(req), action === 'signup' ? AUTH_LIMITS.signup : AUTH_LIMITS.verifyIp);
 }
