@@ -64,4 +64,4 @@ Sent through SendGrid with the shared template (`src/server/email/template.ts`, 
 The main app no longer serves an admin portal. Its old `/admin` pages, the `POST /api/admin/auth` password sign-in and the `nexdo_admin_session` cookie are gone; the admin API accepts only a bearer session sent with the `X-Admin-Client` secret.
 
 - `/admin` and `/admin/*` on the main app answer `308` to the same page in the admin app: `ADMIN_APP_URL` + the path without `/admin` + the query string (`/admin/users?from=…` → `<ADMIN_APP_URL>/users?from=…`). Without `ADMIN_APP_URL` (or with a value that is not an http(s) URL) they answer `404`. `/api/admin/*` is unaffected.
-- An administrator who signs in to the main app goes to `ADMIN_APP_URL` when it is set, and otherwise stays in the app as a normal user.
+- An administrator who signs in to the main app stays in the main app like any other user. The admin app has its own email-code sign-in, so administrators open `ADMIN_APP_URL` directly when they want it.
