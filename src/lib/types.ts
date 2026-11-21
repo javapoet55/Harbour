@@ -16,6 +16,10 @@ export type AgendaTask = {
   critical?: boolean;
   subtasks?: Array<{ id: string; title: string; completedAt: string | null }>;
   recurrence?: { frequency: string; interval: number } | null;
+  /** The folder the task is filed in. Absent when a payload does not carry it. */
+  projectId?: string | null;
+  /** Set when Nexdo recognised a smart reminder (bill, renewal, expiration and so on). */
+  lifeReminderType?: string | null;
 };
 
 export type AgendaEvent = {
