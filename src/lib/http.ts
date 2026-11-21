@@ -10,6 +10,7 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && err.message === 'TASK_CHANGED') return NextResponse.json({ error: 'Your task changed. Refresh and try again.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_TASK_STATE') return NextResponse.json({ error: 'Restore this task before starting it.' }, { status: 409 });
   if (err instanceof ScheduleWarning) return NextResponse.json({ code: 'SCHEDULE_WARNING', error: err.message, warnings: err.warnings }, { status: 409 });
+  if (err instanceof Error && err.message === 'INVALID_NOTE') return NextResponse.json({ error: 'Write a note of up to 20,000 characters, with a title of up to 200.' }, { status: 400 });
   if (err instanceof Error && err.message === 'INVALID_PROJECT') return NextResponse.json({ error: 'Enter a project name of 1–80 characters and a valid color.' }, { status: 400 });
   if (err && typeof err === 'object' && 'code' in err && ['P2034', 'P2028'].includes(String(err.code))) return NextResponse.json({ error: 'Your data changed while this request was processing. Refresh and try again.' }, { status: 409 });
   if (err instanceof Error && ['INVALID_LOCAL_TIME', 'INVALID_TASK'].includes(err.message)) return NextResponse.json({ error: err.message === 'INVALID_LOCAL_TIME' ? 'That local time does not exist. Choose a valid time outside the daylight-saving clock change.' : 'Enter a valid task title, date, and positive duration.' }, { status: 400 });

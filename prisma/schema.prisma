@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  notes Note[]
   aiApiReceipts AiApiReceipt[]
   callerIdentity CallerIdentity?
   nutritionCallSettings NutritionCallSettings?
@@ -161,6 +162,19 @@ model Project {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
   tasks     Task[]
+  @@index([userId, deletedAt, updatedAt])
+}
+
+/// Free-form text a person keeps alongside their tasks (web Quick Add → Note).
+model Note {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("")
+  body      String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
   @@index([userId, deletedAt, updatedAt])
 }
 

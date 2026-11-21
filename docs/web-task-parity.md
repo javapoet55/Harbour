@@ -90,3 +90,31 @@ These apply to the web app only, not to the phone apps:
 
 `src/lib/task-query.test.ts` (41 cases, ported from the Android suite) and `src/lib/task-list.test.ts`
 (19 cases) cover the filtering, counting, sectioning, ordering, spacing and folder logic.
+
+## Tasks dashboard redesign (Nov 21, 2026)
+
+The Tasks page was redesigned to the "Tasks" mockup. Illustrations in `public/tasks/` are cut from
+the Nexdo Tasks UI asset pack using the pack's own transparency.
+
+| Part | What it does | Data |
+|---|---|---|
+| Five counts | Total open, Overdue, To Do, In Progress, Completed (7d) | `GET /api/tasks`, `taskStats` |
+| Tasks / Folders / Notes | Notes is new; Folders unchanged | `GET /api/notes` |
+| List / Cards / Board | Board groups by To Do, In Progress, Waiting, Completed (7d) | in the browser |
+| Add a task bar | Enter adds a 30-minute task today, spaced around existing tasks; the sliders open the full form; the sparkle sends the text to Ask Nexdo | `POST /api/tasks` |
+| Chips and filters | All Tasks, Today, Tomorrow, This Week, High Priority, More Filters (status, priority); Sort by Due Date, Priority, Title or My Order (drag) | `taskSections` |
+| Sections | Overdue, Today, Tomorrow, This Week (next 7 days), Later, Unscheduled, Completed; each collapses | in the browser |
+| Task Insights | Monday-to-Sunday progress (completed of completed + open dated this week) and completions per day | `weeklyProgress` |
+| Quick Add → Reminder | A five-minute reminder task that notifies at its time, saved like a voice reminder | `POST /api/tasks` with `reminder: true` (new) |
+| Quick Add → Event | A calendar event, pushed to a connected calendar | `POST /api/calendar/events` |
+| Quick Add → Note | A note, listed under the Notes tab, editable and deletable | `/api/notes` (new) |
+| Focus Timer | The phones' Pomodoro: category, name, 5–120 minutes, auto 5-minute break, sound, pause, stop, history (Today / Week / Month / All Time) | `GET/PUT /api/pomodoro`, same session records as the phones |
+
+Server changes: the `Note` table (migration `20261121000000_notes`), `GET/POST /api/notes`,
+`PATCH/DELETE /api/notes/[id]`, notes in the account export, and `reminder: true` on `POST /api/tasks`.
+
+The Pomodoro rules (`src/lib/pomodoro.ts`, `pomodoro-analytics.ts`) are the Android port's, with its
+tests. The timer runs in the browser and keeps the phones' cache key (`nexdo.pomodoro.v1.<account>`),
+so sessions sync both ways with the phone apps. "Distraction-free mode" uses the browser's screen
+wake lock where available. The web has no background notifications for the timer; the chime plays
+when the page is open.
