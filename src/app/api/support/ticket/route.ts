@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { takeAiQuota } from '@/server/ai-quota';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { consumeLimit } from '@/server/signup/abuse';
@@ -25,6 +26,7 @@ async function handler(req: Request) {
         return Response.json({ error: 'Describe the problem in up to 1,000 characters.' }, { status: 400, headers });
       }
       await consumeLimit('support-ticket-draft', user.id, 40, 3_600_000);
+      await takeAiQuota(user, 'support_ticket');
       return Response.json(await draftTicket(parsed.data.messages, req.signal), { headers });
     }
     if (body?.action === 'submit') {

@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  aiDailyUsage AiDailyUsage[]
   notes Note[]
   reminderCalls ReminderCall[]
   aiApiReceipts AiApiReceipt[]
@@ -1037,4 +1038,17 @@ model ReminderCall {
 
   @@unique([taskId, fireAt, attempt])
   @@index([status, scheduledFor])
+}
+
+/// Per-user daily use of each AI feature (the account's local day), shared by every server instance.
+model AiDailyUsage {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature   String
+  day       String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, feature, day])
+  @@index([day])
 }

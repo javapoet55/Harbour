@@ -1,4 +1,5 @@
 import { healthRoute } from '@/server/health/telemetry';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { runConversationalAgent } from '@/server/conversational-agent';
@@ -22,7 +23,16 @@ async function healthHandlerPOST(req: Request) {
       if (violation) return NextResponse.json({ ...blockedAssistantTurn(requestedTranscript, violation.category), voiceEnabled: user.preference?.voiceEnabled ?? true }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    const turn = await runConversationalAgent(user.id, requestedTranscript, confirmActionId, rejectActionId, contextActionId);
+    // A new question uses the day's quota; confirming, rejecting or following up on an earlier turn does not.
+    const asking = !confirmActionId && !rejectActionId;
+    if (asking) await takeAiQuota(user, 'assistant');
+    let turn;
+    try {
+      turn = await runConversationalAgent(user.id, requestedTranscript, confirmActionId, rejectActionId, contextActionId);
+    } catch (agentError) {
+      if (asking && agentError instanceof Error && /OpenAI|structured plan/.test(agentError.message)) await refundAiQuota(user, 'assistant');
+      throw agentError;
+    }
     const safeTurn = sanitizeAssistantOutput({ transcript: requestedTranscript, spoken: turn.spoken, visual: turn.visual, confirmation: turn.confirmation, contextActionId: turn.contextActionId, executive: turn.executive });
     return NextResponse.json({ ...safeTurn, voiceEnabled: user.preference?.voiceEnabled ?? true }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {

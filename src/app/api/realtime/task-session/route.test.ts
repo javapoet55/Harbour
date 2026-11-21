@@ -2,6 +2,7 @@ import { voiceAllowanceResponse } from '@/server/voice/usage';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { POST } from './route';
 import { nexdoPersonality } from '@/server/assistant-personality';
+vi.mock('@/server/ai-quota', () => ({ takeAiQuota: vi.fn(), refundAiQuota: vi.fn() })); // The daily quota has its own tests.
 const auth = vi.hoisted(() => ({ requireUser: vi.fn() }));
 vi.mock('@/server/auth', () => auth);
 const upstream = vi.fn();

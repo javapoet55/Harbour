@@ -1,8 +1,15 @@
 import { ScheduleWarning } from './schedule-warning';
 import { NextResponse } from 'next/server';
 import { log } from './logger';
+import { aiQuotaBody } from './ai-quota-message';
 
 export function jsonError(err: unknown) {
+  // A signed-in AI feature's daily uses are spent (src/server/ai-quota.ts).
+  if (err instanceof Error && err.message === 'AI_DAILY_LIMIT_REACHED' && 'feature' in err && 'resetsAt' in err && err.resetsAt instanceof Date) {
+    const quota = err as Error & { feature: string; limit: number; resetsAt: Date };
+    return NextResponse.json(aiQuotaBody(quota), { status: 429, headers: { 'Cache-Control': 'private, no-store', 'Retry-After': String(Math.max(1, Math.ceil((quota.resetsAt.getTime() - Date.now()) / 1000))) } });
+  }
+  if (err instanceof Error && err.message === 'AI_QUOTA_UNAVAILABLE') return NextResponse.json({ error: 'AI features are briefly unavailable. Please try again in a minute.' }, { status: 503 });
   if (err instanceof Error && ['AUTH_RATE_LIMITED', 'BOT_CHECK_FAILED', 'SIGNUP_SECURITY_UNAVAILABLE', 'DISPOSABLE_EMAIL', 'INVALID_EMAIL_DOMAIN'].includes(err.message)) {
     const messages: Record<string, string> = { AUTH_RATE_LIMITED: 'Too many attempts. Please try again later.', BOT_CHECK_FAILED: 'Please complete the security check and try again.', SIGNUP_SECURITY_UNAVAILABLE: 'Account security checks are temporarily unavailable. Please try again shortly.', DISPOSABLE_EMAIL: 'Please use a permanent email address to create your Nexdo account.', INVALID_EMAIL_DOMAIN: 'Please enter a valid email address.' };
     return NextResponse.json({ error: messages[err.message] }, { status: err.message === 'AUTH_RATE_LIMITED' ? 429 : err.message === 'SIGNUP_SECURITY_UNAVAILABLE' ? 503 : 400 });

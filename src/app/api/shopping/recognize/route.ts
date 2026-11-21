@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { healthRoute, observedFetch } from '@/server/health/telemetry';
@@ -13,6 +14,7 @@ const identification = z.object({
   category: z.enum(categories), confidence: z.enum(['high', 'medium', 'low']),
 });
 async function recognize(req: Request) {
+  let charged: { id: string; timeZone?: string | null } | null = null;
   try {
     const user = await requireUser();
     const raw = await req.text();
@@ -26,6 +28,7 @@ async function recognize(req: Request) {
     for (const [id, usage] of attempts) if (now - usage.start > 3600000 && !usage.busy) attempts.delete(id);
     const usage = attempts.get(user.id) ?? { start: now, count: 0, busy: false };
     if (usage.busy || usage.count >= 30) return Response.json({ error: 'Please wait before identifying another photo.' }, { status: 429, headers });
+    await takeAiQuota(user, 'shopping_photo'); charged = user;
     usage.count++; usage.busy = true; attempts.set(user.id, usage);
     try {
       const response = await observedFetch('https://api.openai.com/v1/responses', {
@@ -51,7 +54,9 @@ async function recognize(req: Request) {
       return Response.json(result, { headers });
     } finally { usage.busy = false; }
   } catch (error) {
-    if (error instanceof Error && error.message === 'UNAUTHENTICATED') return jsonError(error);
+    if (error instanceof Error && ['UNAUTHENTICATED', 'AI_DAILY_LIMIT_REACHED', 'AI_QUOTA_UNAVAILABLE'].includes(error.message)) return jsonError(error);
+    // The provider failed: give the use back.
+    if (charged) await refundAiQuota(charged, 'shopping_photo');
     return Response.json({ error: 'Photo identification did not finish. Try again or enter the details manually.' }, { status: 502, headers });
   }
 }
