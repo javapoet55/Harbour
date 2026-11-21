@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState, type ComponentProps, type ReactNode } from 'react';
-import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, Lock, type LucideIcon } from 'lucide-react';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import './auth.css';
@@ -10,12 +9,17 @@ import './auth.css';
  * The frame every account page shares: brand panel with its illustration on the left, the form on the
  * right. `scene` picks the illustration. On narrow screens the brand panel collapses to a header.
  */
+const SITE_URL = 'https://www.nexdoapp.com';
+
 export function AuthShell({ scene, aside, children }: { scene: 'signup' | 'login' | 'reset'; aside: ReactNode; children: ReactNode }) {
   return (
     <main className={`au au-${scene}`}>
+      {/* Both logos lead to the public website. The page-corner one hides on narrow screens, where the
+          card's own logo sits at the top. */}
+      <a href={SITE_URL} className="au-site-logo" aria-label="NexDo website"><NexdoLogo /></a>
       <div className="au-frame">
         <section className="au-aside">
-          <Link href="/welcome" className="au-brand" aria-label="NexDo home"><NexdoLogo priority /></Link>
+          <a href={SITE_URL} className="au-brand" aria-label="NexDo website"><NexdoLogo priority /></a>
           {aside}
           <div className="au-scene" aria-hidden="true" />
         </section>
