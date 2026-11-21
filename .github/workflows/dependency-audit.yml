@@ -1,5 +1,5 @@
-# Fails when a dependency of the web app or the admin app that ships to production has a known high or
-# critical vulnerability.
+# Fails when a dependency of the web app, the admin app or the phone app that ships to production has a
+# known high or critical vulnerability.
 # Runs on every pull request and push to the three deploy branches, and weekly so a newly published
 # advisory is noticed even when nobody is pushing.
 name: Dependency audit
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: ['.', admin]
+        package: ['.', admin, mobile]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,16 +31,3 @@ jobs:
       # Advisories judged not to affect the running app are listed, with reasons, in .github/audit-accepted.json.
       - name: Audit production dependencies (${{ matrix.package }})
         run: node scripts/audit-production.mjs ${{ matrix.package }}
-
-  # The phone app's findings are in Expo's and Firebase's own toolchains and are fixed by SDK upgrades,
-  # so this job reports them without failing the check.
-  audit-mobile:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Audit production dependencies (mobile)
-        run: node scripts/audit-production.mjs mobile
