@@ -16,7 +16,7 @@ import {
 import { TaskDetailSheet } from './today-board';
 import { FocusSessionControl } from './focus-session';
 import { TaskCreateSheet } from './task-create-sheet';
-import { FolderDetail, FolderList } from './task-folders';
+import { ConfirmDialog, FolderDetail, FolderList } from './task-folders';
 import { FocusTimerCard, usePomodoro } from './focus-timer';
 import { EventSheet, NoteSheet, ReminderSheet, type Note } from './quick-add-sheets';
 import { NotesPanel } from './notes-panel';
@@ -64,6 +64,9 @@ export function TasksScreen() {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [remindersLoaded, setRemindersLoaded] = useState(false);
   const [remindersError, setRemindersError] = useState('');
+  const [editingReminder, setEditingReminder] = useState<ReminderItem | null>(null);
+  const [deletingReminder, setDeletingReminder] = useState<ReminderItem | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [userId, setUserId] = useState('');
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_TASK_FILTERS);
   const [sortChoice, setSortChoice] = useState<SortChoice>('Due Date');
@@ -157,6 +160,21 @@ export function TasksScreen() {
   }, []);
   // Reminders are part of the task list, so anything that reloads tasks refreshes their history too.
   const reload = useCallback(async () => { await Promise.all([loadTasks(), loadFolders(), loadReminders()]); }, [loadTasks, loadFolders, loadReminders]);
+  async function deleteReminder(reminder: ReminderItem) {
+    setDeletingBusy(true);
+    try {
+      const response = await fetch(`/api/reminders/${reminder.id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('delete');
+      setReminders((list) => list.filter((r) => r.id !== reminder.id));
+      say(`Reminder deleted: “${reminder.title}”.`);
+      void reload();
+    } catch {
+      setError('Couldn’t delete this reminder. Please try again.');
+    } finally {
+      setDeletingBusy(false);
+      setDeletingReminder(null);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,7 +192,7 @@ export function TasksScreen() {
     return () => controller.abort();
   }, [loadTasks, loadFolders, loadNotes, loadReminders]);
 
-  const idle = !creating && !quick && !noteSheet && !editingId && !busy && !completingId && !dragging && !adding;
+  const idle = !creating && !quick && !noteSheet && !editingId && !editingReminder && !deletingReminder && !busy && !completingId && !dragging && !adding;
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === 'visible' && idle) void reload(); };
     const interval = window.setInterval(refresh, 60_000);
@@ -393,7 +411,7 @@ export function TasksScreen() {
       {tab === 'folders' ? (openFolder === undefined
         ? <FolderList folders={folders} tasks={tasks} loaded={foldersLoaded} error={foldersError} onRetry={() => void loadFolders()} onOpen={setOpenFolder} onChanged={reload} />
         : <FolderDetail folderId={openFolder} folders={folders} foldersLoaded={foldersLoaded} tasks={tasks} tasksLoading={loading} timeZone={zone} onBack={() => setOpenFolder(undefined)} onOpenTask={setEditingId} onAddTask={(folderId) => setCreating({ folderId, title: '' })} onChanged={reload} />)
-      : tab === 'reminders' ? <RemindersPanel reminders={reminders} loaded={remindersLoaded} error={remindersError} timeZone={zone} now={now} onRetry={() => void loadReminders()} onOpen={setEditingId} onNew={() => setQuick('reminder')} />
+      : tab === 'reminders' ? <RemindersPanel reminders={reminders} loaded={remindersLoaded} error={remindersError} timeZone={zone} now={now} onRetry={() => void loadReminders()} onEdit={setEditingReminder} onDelete={setDeletingReminder} onNew={() => setQuick('reminder')} />
       : tab === 'notes' ? <NotesPanel notes={notes} loaded={notesLoaded} error={notesError} timeZone={zone} onRetry={() => void loadNotes()} onOpen={(note) => setNoteSheet({ note })} onNew={() => setNoteSheet({ note: null })} />
       : <div role="tabpanel" aria-label="Tasks">
         <form className="tk-add" onSubmit={(event) => { event.preventDefault(); void quickAdd(); }}>
@@ -495,6 +513,11 @@ export function TasksScreen() {
     {creating && timeZone && <TaskCreateSheet timeZone={timeZone} tasks={tasks} folders={folders} initialFolderId={creating.folderId} initialTitle={creating.title}
       onClose={() => setCreating(null)}
       onCreated={(title, scheduledAt) => { setCreating(null); say(`Added “${title}” for ${weekdayShort(scheduledAt)} at ${clockTime(scheduledAt)}.`); void reload(); }} />}
+    {editingReminder && timeZone && <ReminderSheet key={editingReminder.id} timeZone={timeZone} reminder={editingReminder} onClose={() => setEditingReminder(null)}
+      onSaved={(title, at) => { setEditingReminder(null); say(`Reminder updated: “${title}”, ${weekdayShort(at)} at ${clockTime(at)}.`); void reload(); }}
+      onDeleted={() => { const title = editingReminder.title; setEditingReminder(null); setReminders((list) => list.filter((r) => r.id !== editingReminder.id)); say(`Reminder deleted: “${title}”.`); void reload(); }} />}
+    {deletingReminder && <ConfirmDialog title="Delete this reminder?" message={`“${deletingReminder.title}” will be removed. Any pop-up, email or call still scheduled for it is cancelled.`} confirm="Delete reminder" busy={deletingBusy}
+      onCancel={() => setDeletingReminder(null)} onConfirm={() => void deleteReminder(deletingReminder)} />}
     {quick === 'reminder' && timeZone && <ReminderSheet timeZone={timeZone} onClose={() => setQuick(null)} onSaved={(title, at) => { setQuick(null); say(`Reminder set: “${title}”, ${weekdayShort(at)} at ${clockTime(at)}.`); void reload(); }} />}
     {quick === 'event' && timeZone && <EventSheet timeZone={timeZone} onClose={() => setQuick(null)} onSaved={(title, message) => { setQuick(null); say(`Event added: “${title}”.${message ? ` ${message}` : ''}`); }} />}
     {noteSheet && <NoteSheet note={noteSheet.note} onClose={() => setNoteSheet(null)}

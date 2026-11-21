@@ -1,4 +1,9 @@
+import { z } from 'zod';
 import { prisma } from '@/server/db';
+import { cancelTaskReminders } from '@/server/reminders';
+import { assertReminderCallsUsable } from '@/server/reminder-calls';
+import { deleteTask } from '@/server/tasks';
+import { pushTaskToExternal } from '@/server/calendar-sync';
 
 export type ReminderChannel = 'popup' | 'email' | 'call';
 /** What happened on one channel for the reminder's current time. */
@@ -70,4 +75,65 @@ export async function reminderHistory(userId: string, now = new Date()): Promise
       recurring: !!task.recurrence, channels,
     };
   });
+}
+
+// ---------- Editing and deleting from the Reminders tab ----------
+
+const reminderEdit = z.object({
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().max(4000),
+  at: z.string().datetime({ offset: true }),
+  notifyPush: z.boolean(),
+  notifyEmail: z.boolean(),
+  notifyCall: z.boolean(),
+}).strict();
+
+/**
+ * Changes a reminder's text, time and channels. A new time must be in the future and starts a fresh
+ * occurrence, so every chosen channel goes out again at that time; keeping the time (for example to fix
+ * the wording of a past reminder) never re-sends anything. Moving a finished reminder to a future time
+ * makes it upcoming again.
+ */
+export async function updateReminder(userId: string, id: string, raw: unknown, now = new Date()) {
+  const parsed = reminderEdit.safeParse(raw);
+  if (!parsed.success) throw new Error('INVALID_REMINDER');
+  const input = parsed.data;
+  const at = new Date(input.at);
+  if (!input.notifyPush && !input.notifyEmail && !input.notifyCall) throw new Error('REMINDER_NO_DELIVERY');
+  const task = await prisma.task.findFirst({ where: { id, userId, deletedAt: null, reminderAt: { not: null } } });
+  if (!task) throw new Error('NOT_FOUND');
+  const moved = at.getTime() !== task.reminderAt!.getTime();
+  if (moved && at <= now) throw new Error('REMINDER_TIME_PASSED');
+  if (input.notifyCall && (!task.notifyCall || moved)) await assertReminderCallsUsable(userId);
+  const reopen = moved && task.status === 'COMPLETED';
+  const notices = input.notifyPush || input.notifyEmail;
+  const addedNotices = notices && !(task.notifyPush || task.notifyEmail) && at > now;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.task.update({ where: { id }, data: {
+      title: input.title, notes: input.notes,
+      notifyPush: input.notifyPush, notifyEmail: input.notifyEmail, notifyCall: input.notifyCall,
+      ...(moved ? { reminderAt: at, startAt: at, dueAt: at } : {}),
+      ...(reopen ? { status: 'PLANNED', completedAt: null } : {}),
+    } });
+    if (!notices) { await cancelTaskReminders(tx, userId, id); return; }
+    if (moved || addedNotices) {
+      const key = `${id}:requested`;
+      const existing = await tx.reminder.findUnique({ where: { idempotencyKey: key } });
+      if (existing) await tx.reminder.update({ where: { id: existing.id }, data: { fireAt: at, status: 'SCHEDULED', generation: { increment: 1 } } });
+      else await tx.reminder.create({ data: { userId, taskId: id, fireAt: at, offsetLabel: 'requested reminder', critical: task.critical, idempotencyKey: key, channelPlan: 'push,email' } });
+    }
+  });
+  if (task.startAt || moved) await pushTaskToExternal(userId, id).catch(() => undefined);
+  return (await reminderHistory(userId, now)).find((item) => item.id === id) ?? null;
+}
+
+/** Deletes a reminder: nothing more is sent or called for it, and it leaves the task list. */
+export async function removeReminder(userId: string, id: string) {
+  const task = await prisma.task.findFirst({ where: { id, userId, deletedAt: null, reminderAt: { not: null } }, select: { id: true } });
+  if (!task) throw new Error('NOT_FOUND');
+  await deleteTask(userId, id);
+  await prisma.reminderCall.updateMany({ where: { taskId: id, status: 'QUEUED' }, data: { status: 'CANCELLED', error: 'deleted', endedAt: new Date() } });
+  await pushTaskToExternal(userId, id).catch(() => undefined);
+  return { deleted: true };
 }

@@ -147,3 +147,8 @@ Each row shows the time, notes, "Repeats"/"Done", and a chip per chosen channel 
 Scheduled, Pending, Sent, Failed, Not sent; Call: Scheduled, Answered, Voicemail, Missed, Failed). Tapping a row
 opens the task details; "New Reminder" and the empty-state "Add New Reminder" open the reminder sheet.
 Data: `GET /api/reminders` (`src/server/reminder-history.ts`). The Notes empty state button reads "+ Add New Note".
+- Edit and delete (Nov 21, 2026): each row has Edit and Delete. Edit opens the reminder sheet prefilled
+  (text, date, time, Pop-up/Email/Call) with a delete button in its footer. `PATCH /api/reminders/[id]`:
+  keeping the time never re-sends; a new time must be in the future, starts a fresh occurrence for every chosen
+  channel, and makes a finished reminder upcoming again. `DELETE /api/reminders/[id]` removes the reminder and
+  cancels any pop-up, email or call still scheduled.
