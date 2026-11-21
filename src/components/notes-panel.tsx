@@ -23,7 +23,7 @@ export function NotesPanel({ notes, loaded, error, timeZone, onRetry, onOpen, on
     {!loaded && !error && <p role="status" className="nx-status">Loading notes…</p>}
     {error && <p role="alert" className="nx-error">{error}<button type="button" onClick={onRetry}>Retry</button></p>}
     {loaded && !shown.length && <div className="nx-status">
-      <Image src="/tasks/clipboard.webp" alt="" width={160} height={116} className="tk-empty-art" />
+      <Image src="/tasks/checklist.webp" alt="" width={160} height={123} className="tk-empty-art" />
       <h2>{term ? 'No matching notes' : 'Keep a note'}</h2>
       <p>{term ? 'Try different words.' : 'Ideas, lists and details for later live here, next to your tasks.'}</p>
       {!term && <button type="button" className="nx-outline-button" onClick={onNew}><Plus size={17} aria-hidden="true" />Add New Note</button>}

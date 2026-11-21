@@ -376,7 +376,7 @@ export function TasksScreen() {
     <div className="tk-top">
       <header className="tk-hero">
         <div><h1>Tasks</h1><p>Turn intention into action. Manage, prioritize, and complete what matters.</p></div>
-        <Image src="/tasks/clipboard.webp" alt="" width={320} height={231} className="tk-hero-art" priority />
+        <Image src="/tasks/checklist.webp" alt="" width={320} height={246} className="tk-hero-art" priority />
       </header>
       <div className="tk-stats" aria-label="Task counts">
         <p className="tk-stat" data-tone="total"><ListTodo size={26} aria-hidden="true" /><span><strong>{stats.total}</strong><small>Total Tasks</small></span></p>
@@ -467,7 +467,7 @@ export function TasksScreen() {
               {open && <ul id={`tk-rows-${section.bucket}`} className={view === 'grid' ? 'tk-grid' : 'tk-rows'}>{rows.map((task, index) => (view === 'grid' ? card(task, section.bucket) : taskRow(task, section.bucket, rows, index)))}</ul>}
             </section>;
           }) : !loadFailed && <div className="nx-status tk-empty">
-            <Image src="/tasks/clipboard.webp" alt="" width={200} height={144} className="tk-empty-art" />
+            <Image src="/tasks/checklist.webp" alt="" width={200} height={154} className="tk-empty-art" />
             <h2>{filters.search.trim() ? 'No matching tasks' : filtered ? 'Nothing here' : 'You’re all caught up'}</h2>
             <p>{filtered ? 'Try another filter, or add a task.' : 'Add a task above, or ask Nexdo to plan your day.'}</p>
             {filtered && <button type="button" className="nx-outline-button" onClick={() => { setFilters(DEFAULT_TASK_FILTERS); setSearchOpen(false); }}>Show all tasks</button>}
