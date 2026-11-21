@@ -68,7 +68,15 @@ export function reopenReminder(db: ReminderDb, id: string, fireAt: Date) {
  * Sends every due reminder. `scope.userId` limits the tick to one account: tests share one database across
  * parallel workers, and an unscoped tick there sends (and changes) other test files' reminders.
  */
+/** A reminder nothing has tried to send for this long is left unsent rather than delivered hours late. */
+export const STALE_REMINDER_MS = 2 * 60 * 60_000;
+
 async function tickRemindersImpl(now = new Date(), scope: { userId?: string } = {}) {
+  // When the scheduler (re)starts after a gap, old untouched reminders would otherwise all go out at once.
+  await prisma.reminder.updateMany({ where: {
+    ...(scope.userId ? { userId: scope.userId } : {}),
+    fireAt: { lt: new Date(now.getTime() - STALE_REMINDER_MS) }, status: 'SCHEDULED', attempts: { none: {} },
+  }, data: { status: 'EXPIRED' } });
   const due = await prisma.reminder.findMany({
     where: {
       ...(scope.userId ? { userId: scope.userId } : {}),
@@ -91,8 +99,9 @@ async function tickRemindersImpl(now = new Date(), scope: { userId?: string } = 
     const prefs = reminder.user.preference;
     if (!prefs) continue;
     const escalation: EscalationPrefs = {
-      pushEnabled: prefs.pushEnabled,
-      emailEnabled: prefs.emailEnabled,
+      // The reminder's own choices (pop-up, email) narrow the account-wide settings; they never widen them.
+      pushEnabled: prefs.pushEnabled && (reminder.task?.notifyPush ?? true),
+      emailEnabled: prefs.emailEnabled && (reminder.task?.notifyEmail ?? true),
       smsEnabled: prefs.smsEnabled,
       escalateToEmailMinutes: prefs.escalateToEmailMinutes,
       escalateToSmsMinutes: prefs.escalateToSmsMinutes,

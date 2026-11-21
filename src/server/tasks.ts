@@ -26,6 +26,9 @@ export async function createTask(input: {
   energyLevel?: string;
   waitingOn?: string | null;
   critical?: boolean;
+  notifyPush?: boolean;
+  notifyEmail?: boolean;
+  notifyCall?: boolean;
   listId?: string | null;
   idempotencyKey?: string;
   projectId?: string | null;
@@ -58,6 +61,9 @@ export async function createTask(input: {
         energyLevel: input.energyLevel ?? 'MEDIUM',
         waitingOn: input.waitingOn ?? null,
         critical: input.critical ?? false,
+        ...(input.notifyPush !== undefined ? { notifyPush: input.notifyPush } : {}),
+        ...(input.notifyEmail !== undefined ? { notifyEmail: input.notifyEmail } : {}),
+        ...(input.notifyCall !== undefined ? { notifyCall: input.notifyCall } : {}),
         listId: input.listId ?? null,
         projectId: input.projectId ?? null,
         idempotencyKey: input.idempotencyKey,
@@ -145,7 +151,7 @@ async function completeTaskInTransaction(tx: Prisma.TransactionClient, task: Com
         waitingOn: task.waitingOn, assignee: task.assignee,
         tags: { create: task.tags.map(tag => ({ tagId: tag.tagId })) },
         subtasks: { create: task.subtasks.map(subtask => ({ title: subtask.title, sortOrder: subtask.sortOrder })) },
-        notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
+        notifySms: task.notifySms, notifyCall: task.notifyCall, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
         recurrence: { create: { anchorDay: task.recurrence.anchorDay ?? tzToday(task.timeZone, task.startAt).getUTCDate(), frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
       } });
       await classifyNewTask(tx, nextTask);

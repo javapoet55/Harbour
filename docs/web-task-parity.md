@@ -118,3 +118,23 @@ tests. The timer runs in the browser and keeps the phones' cache key (`nexdo.pom
 so sessions sync both ways with the phone apps. "Distraction-free mode" uses the browser's screen
 wake lock where available. The web has no background notifications for the timer; the chime plays
 when the page is open.
+
+## Reminder calls (Nov 21, 2026)
+
+Quick Add → Reminder has a **Remind me by** choice: Pop-up, Email and Call (any combination, at least one).
+
+- **Call**: at the reminder time Nexdo phones the user's verified number from the Twilio voice number and reads
+  the reminder title and notes (Polly voice). Press 1 to hear it again, 2 to mark it done. A voicemail gets the
+  message after the beep. A missed or busy call is retried once, 5 minutes later.
+- The number is the one verified by the check-in code call (`/api/nutrition/phone`) or a verified caller ID.
+  The sheet verifies it inline when needed.
+- Data: `Task.notifyCall` and the `ReminderCall` table (one row per reminder time and attempt).
+- Scheduling: `POST /api/reminder-calls/tick` (cron secret) every minute from `scripts/moments-worker.mjs`,
+  which now also runs the pop-up/email reminder tick (`POST /api/notifications {action:"tick"}`). Before this,
+  nothing called that tick with the cron secret, so the browser's attempts got 401 and scheduled pop-up/email
+  reminders were not sent. Reminders that are more than 2 hours overdue and were never attempted are marked
+  `EXPIRED` instead of being sent late.
+- Twilio webhooks: `/api/reminder-calls/{twiml,gather,status}`, signature-checked like the Moments calls.
+- Switch: set `REMINDER_CALLS_ENABLED=false` to turn calls off; otherwise they are on wherever Twilio is configured.
+- Pop-up and Email choices are stored on `Task.notifyPush` / `Task.notifyEmail` and now narrow the account-wide
+  notification settings for that reminder.
