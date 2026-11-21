@@ -74,7 +74,7 @@ export function RemindersPanel({ reminders, loaded, error, timeZone, now, onRetr
     {!loaded && !error && <p role="status" className="nx-status">Loading reminders…</p>}
     {error && <p role="alert" className="nx-error">{error}<button type="button" onClick={onRetry}>Retry</button></p>}
     {empty && <div className="nx-status">
-      <Image src="/tasks/clipboard.webp" alt="" width={160} height={116} className="tk-empty-art" />
+      <Image src="/tasks/checklist.webp" alt="" width={160} height={123} className="tk-empty-art" />
       <h2>{term ? 'No matching reminders' : 'Never miss a moment'}</h2>
       <p>{term ? 'Try different words.' : 'Get a pop-up, an email or a call that reads the reminder to you.'}</p>
       {!term && <button type="button" className="nx-outline-button" onClick={onNew}><Plus size={17} aria-hidden="true" />Add New Reminder</button>}
