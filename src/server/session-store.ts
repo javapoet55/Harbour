@@ -24,10 +24,18 @@ export function sessionActive(session: SessionTimes, now = new Date()) {
   return session.expiresAt > now && now.getTime() - session.lastSeenAt.getTime() < sessionIdleMs();
 }
 
-/** Starts a session for this user and removes that user's dead ones, so the table needs no cleanup job. */
-export async function createSession(userId: string, now = new Date()) {
+/** A sign-in without "Remember me" lasts at most this long, even if the browser is never closed. */
+export const UNREMEMBERED_SESSION_MS = DAY_MS;
+
+/**
+ * Starts a session for this user and removes that user's dead ones, so the table needs no cleanup job.
+ * `remember: false` is a sign-in on a browser the user does not want to stay signed in on.
+ */
+export async function createSession(userId: string, options: { remember?: boolean; now?: Date } = {}) {
+  const now = options.now ?? new Date();
   const id = randomBytes(32).toString('hex');
-  const expiresAt = new Date(now.getTime() + sessionMaxAgeMs());
+  const lifetime = options.remember === false ? Math.min(UNREMEMBERED_SESSION_MS, sessionMaxAgeMs()) : sessionMaxAgeMs();
+  const expiresAt = new Date(now.getTime() + lifetime);
   await prisma.$transaction([
     prisma.userSession.deleteMany({ where: { userId, OR: [{ expiresAt: { lte: now } }, { lastSeenAt: { lte: new Date(now.getTime() - sessionIdleMs()) } }] } }),
     prisma.userSession.create({ data: { id, userId, lastSeenAt: now, expiresAt } }),

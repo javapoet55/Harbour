@@ -3,9 +3,37 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { CalendarCheck, CalendarDays, Home, Mail, Mic, Plus, Sparkles, Star, User } from 'lucide-react';
 import { SignupBotCheck } from '@/components/signup-bot-check';
-import { NexdoLogo } from '@/components/nexdo-logo';
-import { PasswordInput } from '@/components/password-input';
+import { AuthAlert, AuthButton, AuthField, AuthPassword, AuthShell } from '@/components/auth/auth-ui';
+
+const points = [
+  { icon: CalendarDays, title: 'Plan your day with a smarter Daily Brief' },
+  { icon: Mic, title: 'Capture tasks by voice or text' },
+  { icon: CalendarCheck, title: 'Keep tasks and calendar in sync' },
+  { icon: Sparkles, title: 'Let NexDo AI prepare', detail: 'your next step — you confirm' },
+];
+
+/** A picture of the app for the sign-up page. Decoration only; hidden from screen readers and small screens. */
+function PhonePreview() {
+  return (
+    <div className="au-phone" aria-hidden="true">
+      <div className="au-phone-screen">
+        <p className="au-phone-time">9:41</p>
+        <p className="au-phone-brand">NexDo<i>✦</i></p>
+        <p className="au-phone-title">Daily Brief ☀️</p>
+        <p className="au-phone-sub">Here’s your plan for today.</p>
+        <ul className="au-phone-list">
+          <li>Team Standup<time>9:00 AM</time></li>
+          <li>Review Q3 deck<time>11:00 AM</time></li>
+          <li>Pick up groceries<time>5:00 PM</time></li>
+        </ul>
+        <p className="au-phone-next"><b>✦ Next Step</b>Prepare for your 11 AM deck review. I can pull up the notes.</p>
+        <div className="au-phone-tabs"><Home size={16} /><CalendarDays size={16} /><span><Plus size={18} /></span><Star size={16} /><User size={16} /></div>
+      </div>
+    </div>
+  );
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -14,18 +42,12 @@ export default function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/auth/register', {
@@ -41,43 +63,41 @@ export default function SignupPage() {
       const body = await response.json().catch(() => ({}));
       if (typeof body.verificationProof === 'string') sessionStorage.setItem('nexdo-verification-proof', body.verificationProof);
       router.push(`/verify-email?email=${encodeURIComponent(email)}${body.emailSent === false ? '&sent=0' : ''}${body.developmentCode ? `&code=${body.developmentCode}` : ''}`);
+    } catch {
+      setError('Could not connect. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
-      setAttempt(value => value + 1);
+      setAttempt((value) => value + 1);
     }
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-5 py-10">
-      <div className="grid w-full gap-10 md:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] md:items-center md:gap-16">
-        <section>
-          <Link href="/welcome" className="nexdo-login-brand" aria-label="Nexdo home"><NexdoLogo priority /></Link>
-          <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">AI-powered to-do, made simple</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">Make space for what matters.</h1>
-          <p className="mt-4 max-w-xl text-lg leading-8 text-[var(--muted)]">Nexdo turns conversations into clear next steps, plans your day around real commitments, and helps you keep moving without the mental load.</p>
-          <div className="mt-7 grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3">
-            <p className="rounded-2xl border border-[var(--line)] bg-white/70 p-4"><strong className="block text-[var(--ink)]">Capture naturally</strong><span className="mt-1 block">Tell Nexdo what you need in your own words.</span></p>
-            <p className="rounded-2xl border border-[var(--line)] bg-white/70 p-4"><strong className="block text-[var(--ink)]">Plan with confidence</strong><span className="mt-1 block">See the right next action when you need it.</span></p>
-            <p className="rounded-2xl border border-[var(--line)] bg-white/70 p-4"><strong className="block text-[var(--ink)]">Stay in control</strong><span className="mt-1 block">Review suggested changes before they happen.</span></p>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-3xl font-semibold">Create your account</h2>
-          <p className="mt-2 text-[var(--muted)]">Start making your day easier with Nexdo.</p>
-          <form onSubmit={onSubmit} className="harbor-card mt-6 space-y-3 p-5">
-            <label className="block text-sm font-medium">Full name<input className="harbor-input mt-1" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required /></label>
-            <label className="block text-sm font-medium">Email address<input className="harbor-input mt-1" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
-            <label className="block text-sm font-medium">Password<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={1} required /></label>
-            <label className="block text-sm font-medium">Confirm password<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={1} required /></label>
-            <p className="text-sm leading-6 text-[var(--muted)]">Your password is securely protected with a one-way hash.</p>
-            <SignupBotCheck onToken={setTurnstileToken} attempt={attempt} />
-            {error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
-            <button className="harbor-btn harbor-btn-brand w-full" type="submit" disabled={isSubmitting || !turnstileToken}>{isSubmitting ? 'Creating account…' : 'Create account'}</button>
-          </form>
-          <p className="mt-4 text-center text-sm text-[var(--muted)]">Already have an account? <Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Sign in</Link></p>
-        </section>
+    <AuthShell
+      scene="signup"
+      aside={<>
+        <h1>Less on your mind. <span>More done in your day.</span></h1>
+        <p className="au-lede">One place for tasks, calendars, reminders, and life’s important moments.</p>
+        <ul className="au-points">
+          {points.map(({ icon: Icon, title, detail }) => (
+            <li key={title}><span className="au-tile"><Icon size={24} aria-hidden="true" /></span><span>{title}{detail && <small>{detail}</small>}</span></li>
+          ))}
+        </ul>
+        <PhonePreview />
+      </>}
+    >
+      <h2>Create your NexDo account</h2>
+      <form onSubmit={onSubmit} className="au-form">
+        <AuthField label="Full name" icon={User} value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter your full name" autoComplete="name" required />
+        <AuthField label="Email address" icon={Mail} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required />
+        <AuthPassword label="Password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" autoComplete="new-password" minLength={1} required />
+        <div className="au-bot"><SignupBotCheck onToken={setTurnstileToken} attempt={attempt} /></div>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <AuthButton type="submit" disabled={isSubmitting || !turnstileToken}>{isSubmitting ? 'Creating account…' : 'Create free account'}</AuthButton>
+      </form>
+      <div className="au-foot">
+        <p className="au-note">Already have an account? <Link className="au-link" href="/login">Log in</Link></p>
+        <p className="au-legal">By creating an account, you agree to our <a href="https://www.nexdoapp.com/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="https://www.nexdoapp.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
       </div>
-    </main>
+    </AuthShell>
   );
 }

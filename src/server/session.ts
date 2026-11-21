@@ -10,16 +10,20 @@ const COOKIE = 'harbor_session';
 // signed in. Cross-site writes are refused separately, by origin (src/lib/csrf.ts).
 const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' });
 
-export async function writeSession(userId: string) {
+/**
+ * Signs this device in. With `remember: false` (the login page's "Remember me" unticked) the cookie has no
+ * expiry date, so the browser drops it when it closes, and the session ends within a day regardless.
+ */
+export async function writeSession(userId: string, options: { remember?: boolean } = {}) {
   const key = sessionSigningKey(); // Fails before any session is stored when the signing secret is not configured.
-  const session = await createSession(userId);
+  const session = await createSession(userId, { remember: options.remember });
   const token = await new SignJWT({ sub: userId, sid: session.id })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(Math.floor(session.expiresAt.getTime() / 1000))
     .sign(key);
   const jar = await cookies();
-  jar.set(COOKIE, token, { ...cookieOptions(), maxAge: Math.floor(sessionMaxAgeMs() / 1000) });
+  jar.set(COOKIE, token, options.remember === false ? cookieOptions() : { ...cookieOptions(), maxAge: Math.floor(sessionMaxAgeMs() / 1000) });
 }
 
 /** Signs this device out: its server-side session is deleted, so a copy of the cookie stops working too. */

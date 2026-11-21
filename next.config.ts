@@ -11,7 +11,7 @@ const securityHeaders = [
   // Browsers that have reached Nexdo over https keep using https for two years.
   { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
   // Microphone (voice), camera (photos) and location (weather) work on Nexdo's pages only, not in frames from elsewhere.
-  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), browsing-topics=()' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()' },
 ];
 
 const nextConfig: NextConfig = {

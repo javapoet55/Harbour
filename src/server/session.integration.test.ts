@@ -5,7 +5,7 @@ import { prisma } from './db';
 import { currentUser } from './auth';
 import { resetPassword } from './account-auth';
 import { clearSession, readSession, writeSession } from './session';
-import { revokeAllSessions, sessionIdleMs, sessionMaxAgeMs, SESSION_TOUCH_INTERVAL_MS } from './session-store';
+import { revokeAllSessions, sessionIdleMs, sessionMaxAgeMs, SESSION_TOUCH_INTERVAL_MS, UNREMEMBERED_SESSION_MS } from './session-store';
 import { sessionSigningKey } from './session-key';
 import { POST as logout } from '@/app/api/auth/logout/route';
 import { POST as logoutEverywhere } from '@/app/api/auth/logout-everywhere/route';
@@ -170,6 +170,37 @@ describe('idle and absolute expiry', () => {
     await as(live);
     await signIn(user.id);
     expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(2);
+  });
+});
+
+describe('signing in without "Remember me"', () => {
+  it('sets a cookie the browser drops when it closes, and ends the session within a day', async () => {
+    const user = await account();
+    await writeSession(user.id, { remember: false });
+    const cookie = jar.get(COOKIE)!;
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/' });
+    expect(cookie.maxAge).toBeUndefined();
+    expect(await as(cookie)).toBe(user.id);
+    advance(UNREMEMBERED_SESSION_MS - 60_000);
+    expect(await as(cookie)).toBe(user.id);
+    advance(2 * 60_000);
+    expect(await as(cookie)).toBeNull();
+  });
+
+  it('is the exception: a plain sign-in is remembered for the full 14 days', async () => {
+    const user = await account();
+    await writeSession(user.id, { remember: true });
+    expect(jar.get(COOKIE)!.maxAge).toBe(14 * 24 * 60 * 60);
+    const session = await prisma.userSession.findFirstOrThrow({ where: { userId: user.id } });
+    expect(session.expiresAt.getTime() - Date.now()).toBe(14 * DAY);
+  });
+
+  it('never outlasts a shorter SESSION_MAX_AGE_DAYS', async () => {
+    vi.stubEnv('SESSION_MAX_AGE_DAYS', '0.5');
+    const user = await account();
+    await writeSession(user.id, { remember: false });
+    const session = await prisma.userSession.findFirstOrThrow({ where: { userId: user.id } });
+    expect(session.expiresAt.getTime() - Date.now()).toBe(12 * HOUR);
   });
 });
 

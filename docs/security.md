@@ -48,6 +48,7 @@ Each sign-in creates a `UserSession` row; the cookie names it (`src/server/sessi
 
 - **Idle expiry.** A session unused for 7 days ends (`SESSION_IDLE_TIMEOUT_HOURS`). Activity is recorded at most once every five minutes.
 - **Absolute expiry.** Every session ends 14 days after sign-in (`SESSION_MAX_AGE_DAYS`), as before.
+- **Remember me.** The web login page sends `remember: false` when the box is unticked. That sign-in gets a cookie with no expiry date, which the browser drops when it closes, and its session ends within a day. Clients that send nothing (the phone apps) are remembered as before.
 - **Sign out** deletes the row, so a copied cookie stops working at once.
 - **Sign out everywhere** (`POST /api/auth/logout-everywhere`, Settings → Security on the web) ends every session of the account, including admin sessions. A password change or reset does the same automatically.
 - The phone apps use the same sessions and the same limits.

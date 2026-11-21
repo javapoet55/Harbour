@@ -16,7 +16,9 @@ async function healthHandlerPOST(req: Request) {
   if (!user.emailVerifiedAt) {
     return NextResponse.json({ code: 'EMAIL_NOT_VERIFIED', verificationProof: signupProof(user), error: 'Verify your email address to sign in.', email: user.email }, { status: 403 });
   }
-  await writeSession(user.id);
+  // Only an explicit `remember: false` (the web login page's unticked box) shortens the session. The phone
+  // apps send nothing and stay signed in as before.
+  await writeSession(user.id, { remember: body.remember !== false });
   const platform = phonePlatform(req.headers.get('user-agent'));
   if (platform) {
     await prisma.userMemory.upsert({
