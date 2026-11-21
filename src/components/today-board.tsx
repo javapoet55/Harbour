@@ -3,10 +3,9 @@ import {TaskAgentCard} from './task-agent-card';
 import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { useEffect, useMemo, useState } from 'react';
-import { formatDay } from '@/lib/time';
 import type { AgendaPayload } from '@/lib/types';
-import { splitSectionItem } from '@/lib/assistant-sections';
 import { MobileDay } from './mobile-day';
+import { MyDayDashboard } from './my-day-dashboard';
 import { TodaySnapshot, useTodaySnapshot } from './today-snapshot';
 import { useRouter } from 'next/navigation';
 import { useFocusSession, FocusSessionControl } from './focus-session';
@@ -28,7 +27,7 @@ export function TodayBoard() {
   const [criticalFirst, setCriticalFirst] = useState(true);
 
   async function load() {
-    const res = await scheduleFetch('/api/agenda?days=5');
+    const res = await scheduleFetch('/api/agenda?days=7');
     if (!res.ok) {
       setError('Could not load your day.');
       return;
@@ -48,7 +47,7 @@ export function TodayBoard() {
       request?.abort();
       const controller = new AbortController();
       request = controller;
-      scheduleFetch('/api/agenda?days=5', { signal: controller.signal, cache: 'no-store' })
+      scheduleFetch('/api/agenda?days=7', { signal: controller.signal, cache: 'no-store' })
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load'))))
         .then((payload: AgendaPayload) => { if (!controller.signal.aborted) { setData(payload); setError(''); } })
         .catch(() => { if (!controller.signal.aborted) setError('Could not load your day.'); });
@@ -70,8 +69,6 @@ export function TodayBoard() {
 
   const todayKey = data?.range.days[0];
   const timeZone = data?.timeZone;
-  const dayOf = (iso: string | null) =>
-    iso && timeZone ? new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '';
   const todayTasks = useMemo(() => {
     const inDay = (iso: string | null) =>
       iso && timeZone ? new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '';
@@ -85,12 +82,6 @@ export function TodayBoard() {
     if (!criticalFirst) return todayTasks;
     return [...todayTasks].sort((a, b) => Number(b.critical || b.priority === 'CRITICAL') - Number(a.critical || a.priority === 'CRITICAL'));
   }, [todayTasks, criticalFirst]);
-  const todayEvents = useMemo(() => {
-    const inDay = (iso: string | null) =>
-      iso && timeZone ? new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '';
-    return data?.events.filter((e) => inDay(e.startAt) === todayKey) ?? [];
-  }, [data, todayKey, timeZone]);
-
   async function addTask(e?: React.FormEvent, mobileTitle?: string) {
     e?.preventDefault();
     const submittedTitle = (mobileTitle ?? title).trim();
@@ -128,17 +119,6 @@ export function TodayBoard() {
     await load();
   }
 
-  function createdLabel(iso: string) {
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
-    return `${parts.weekday}, ${parts.month} ${parts.day} ${parts.year}`;
-  }
-
-  function nextDayLabel(day: string) {
-    const [year, month, date] = day.split('-').map(Number);
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).formatToParts(new Date(Date.UTC(year, month - 1, date))).map((part) => [part.type, part.value]));
-    return `${parts.weekday}, ${parts.month} ${parts.day} ${parts.year}`;
-  }
-
   function toggleFocus(taskId: string) {
     if (focusTaskId !== taskId || focusSeconds === 0) { void focus.start(taskId, data?.tasks.find((task) => task.id === taskId)?.title ?? 'Focus'); return; }
     focus.toggle();
@@ -147,66 +127,13 @@ export function TodayBoard() {
   if (error && !data) return <p role="alert" className="text-[var(--danger)]">{error} <button type="button" className="underline" onClick={() => void load().catch(() => setError('Could not load your day.'))}>Try again</button></p>;
   if (!data) return <p className="text-[var(--muted)]">Loading your day…</p>;
 
-  const greetingHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
-  const hello = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
-
   return (
     <div className="space-y-4 sm:space-y-5">
       {error && <p role="alert" className="text-sm text-[var(--danger)]">{error} Showing your last loaded tasks.</p>}
       <MobileDay data={data} tasks={displayedTodayTasks} completed={completedToday} weather={<Weather />} snapshot={<TodaySnapshot {...snapshot} onOpenTask={openSnapshotTask} />} criticalFirst={criticalFirst} toggleSort={() => setCriticalFirst((value) => !value)} openTask={setEditingTask} complete={complete} restore={restore} add={(value) => addTask(undefined, value)} />
-      <div className="hidden space-y-5 md:block">
-      <header className="flex items-start justify-between gap-3 sm:gap-4">
-        <div className="min-w-0 flex-1"><p className="text-sm text-[var(--muted)]">{formatDay(new Date(), data.timeZone)}</p>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{hello}.</h1>
-        <p className="mt-1 max-w-2xl text-sm text-[var(--muted)] sm:text-base">Ask what is coming up, capture a task by voice, and Nexdo will keep the reminders honest.</p></div>
-        <Weather />
-      </header>
-
-      <TodaySnapshot {...snapshot} onOpenTask={openSnapshotTask} />
-
-      <form onSubmit={addTask} className="flex flex-col gap-2 sm:flex-row">
-        <input className="harbor-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quick add a task" aria-label="Quick add task" />
-        <button className="harbor-btn harbor-btn-brand" type="submit" disabled={adding || !title.trim()}>{adding ? 'Adding…' : 'Add task'}</button>
-      </form>
-
-      <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
-        <Card title="Today’s calendar appointments">
-          <List items={todayEvents.map((e) => e.title)} empty="No appointments today." />
-        </Card>
-        <Card title="Today’s to-do tasks" titleClassName="text-sm font-extrabold uppercase tracking-wide text-[#283c55]" action={<button type="button" onClick={() => setCriticalFirst((value) => !value)} className={`flex h-9 w-9 items-center justify-center rounded-full border text-[#315b8a] transition ${criticalFirst ? 'border-[#7da9e8] bg-[#edf4fc]' : 'border-[var(--line)] bg-white'}`} aria-label={criticalFirst ? 'Critical-first sorting is on. Show schedule order' : 'Sort critical tasks first'} title={criticalFirst ? 'Critical tasks first' : 'Sort critical tasks first'}><SortIcon /></button>}>
-          {displayedTodayTasks.length === 0 ? <p className="text-sm text-[var(--muted)]">No tasks due today.</p> : displayedTodayTasks.map((task) => {
-            const isCritical = Boolean(task.critical || task.priority === 'CRITICAL');
-            return <div key={task.id} className={`harbor-task-row flex items-start gap-3 border-b border-[var(--line)] px-2 py-3 last:border-0 ${isCritical ? 'rounded-xl bg-[#fff7f6]' : ''}`}>
-              <button type="button" className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d6a91f] bg-[#fffdf3] transition hover:bg-[#fff1a8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a]" onClick={() => void complete(task.id)} aria-label={`Complete ${task.title}`} title="Mark complete" />
-              <div className="min-w-0 flex-1">
-                <button type="button" className={`rounded text-left font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a] ${isCritical ? 'text-[#b42318]' : 'hover:text-[var(--brand)]'}`} onClick={() => setEditingTask(task)} aria-label={`Open details for ${task.title}`}>{task.title}</button>
-                <p className={`mt-0.5 text-xs tracking-wide ${isCritical ? 'font-semibold text-[#b42318]' : 'text-[var(--faint)]'}`}><span className="uppercase">{isCritical ? 'CRITICAL' : task.priority} · {task.durationMin}m</span> · {createdLabel(task.createdAt)}</p>
-              </div>
-              <div className="flex w-28 shrink-0 justify-end">
-                <button type="button" className={`flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-[var(--line)] bg-white text-[#315b8a] transition hover:bg-[#edf4fc] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a] ${focusTaskId === task.id ? 'w-28 px-3' : 'w-10'}`} onClick={() => toggleFocus(task.id)} aria-label={focusTaskId === task.id ? `${focusRunning ? 'Pause' : 'Resume'} focus timer, ${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')} remaining` : `Start 25 minute focus timer for ${task.title}`} title={focusTaskId === task.id ? `${focusRunning ? 'Pause' : 'Resume'} focus timer` : 'Start 25 minute focus timer'}>{focusTaskId === task.id && !focusRunning ? <PlayIcon /> : focusTaskId === task.id ? <PauseIcon /> : <ClockIcon />}{focusTaskId === task.id ? <span className="font-mono text-sm font-semibold tabular-nums" aria-hidden="true">{String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:{String(focusSeconds % 60).padStart(2, '0')}</span> : null}</button>
-              </div>
-            </div>;
-          })}
-        </Card>
-        <div className="lg:col-span-2"><Card title="Overdue">
-          <List items={data.overdue.map((t) => t.title)} empty="Nothing overdue." />
-        </Card></div>
-        <Card title="Calendar preview">
-          <List items={data.events.slice(0, 5).map((e) => e.title)} empty="No upcoming events." />
-        </Card>
-        <Card title="Next three days">
-          <div className="space-y-3 text-sm">{data.range.days.slice(1, 4).map((day) => {
-            const items = [
-              ...data.events.filter((e) => dayOf(e.startAt) === day).map((e) => e.title),
-              ...data.tasks.filter((t) => !['COMPLETED', 'CANCELLED'].includes(t.status) && (dayOf(t.dueAt) === day || dayOf(t.startAt) === day)).map((t) => t.title),
-            ];
-            return <div key={day}><p className="font-medium">{nextDayLabel(day)}</p>{items.length ? <ul className="ml-5 mt-1 list-disc space-y-1">{items.map((item, index) => <li key={`${day}-${item}-${index}`}>{compactLines(item).map((line, lineIndex) => <p key={`${day}-${item}-${lineIndex}`}>{line}</p>)}</li>)}</ul> : <p className="mt-1 text-[var(--muted)]">Clear</p>}</div>;
-          })}</div>
-        </Card>
-        <div className="lg:col-span-2"><Card title="Completed">
-          {completedToday.length ? <ul className="space-y-1 text-sm">{completedToday.map((task) => <li key={task.id}><button type="button" onClick={() => void restore(task.id)} className="group flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left text-[var(--muted)] transition hover:bg-[#edf4fc] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a]" aria-label={`Restore ${task.title} to today's to-do list`} title="Restore to today's to-do list"><span aria-hidden="true" className="text-[var(--ok)]">✓</span><span className="line-through group-hover:no-underline">{task.title}</span></button></li>)}</ul> : <p className="text-sm text-[var(--muted)]">No tasks completed today.</p>}
-        </Card></div>
-      </section>
+      <div className="hidden md:block">
+        <MyDayDashboard data={data} snapshot={snapshot.data} completedToday={completedToday.length} onOpenTask={setEditingTask} onComplete={complete} onReload={load}
+          onStartFocus={(taskId, taskTitle) => { if (focusTaskId !== taskId || focusSeconds === 0) void focus.start(taskId, taskTitle); }} />
       </div>
       {editingTask ? <TaskDetailSheet task={editingTask} timeZone={data.timeZone} focusControl={<button type="button" className="harbor-btn w-full" onClick={() => toggleFocus(editingTask.id)}>{focusTaskId === editingTask.id ? `${focusRunning ? 'Pause' : 'Resume'} focus · ${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')}` : 'Start a 25-minute focus session'}</button>} onClose={() => setEditingTask(null)} onSaved={async () => { setEditingTask(null); await load(); }} onComplete={async () => { await complete(editingTask.id); setEditingTask(null); }} /> : null}
     </div>
@@ -350,31 +277,4 @@ function Weather() {
     return () => controller.abort();
   }, []);
   return <aside className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#7da9e8] bg-gradient-to-br from-[#e9f4ff] via-[#cfe5ff] to-[#94bff2] shadow-sm sm:h-14 sm:w-14" aria-live="polite" aria-label={weather ? `Weather for ZIP 94582: ${Math.round(weather.current.temperature_2m)} degrees Fahrenheit` : message} title="Weather for ZIP 94582">{weather ? <p className="text-base font-semibold text-[#163f6d] sm:text-lg">{Math.round(weather.current.temperature_2m)}°F</p> : <p className="px-1 text-center text-[8px] leading-tight text-[#295b91]">{message}</p>}</aside>;
-}
-
-function ClockIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
-function PauseIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>; }
-function PlayIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="m8 5 11 7-11 7z"/></svg>; }
-function SortIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 6h11M8 12h8M8 18h5M4 5v14M2 17l2 2 2-2"/></svg>; }
-
-function Card({ title, children, action, titleClassName }: { title: string; children: React.ReactNode; action?: React.ReactNode; titleClassName?: string }) {
-  return (
-    <section className="harbor-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-3"><h2 className={titleClassName ?? 'text-sm font-extrabold uppercase tracking-wide text-[#283c55]'}>{title}</h2>{action}</div>
-      {children}
-    </section>
-  );
-}
-
-function List({ items, empty }: { items: string[]; empty: string }) {
-  if (!items.length) return <p className="text-sm text-[var(--muted)]">{empty}</p>;
-  return (
-    <ul className="space-y-2 text-sm">
-      {items.map((item, index) => <li key={`${item}-${index}`}>{compactLines(item).map((line, lineIndex) => <p key={`${item}-${lineIndex}`}>{line}</p>)}</li>)}
-    </ul>
-  );
-}
-
-function compactLines(value: string): string[] {
-  return splitSectionItem(value);
 }

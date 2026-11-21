@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { NexdoLogo } from './nexdo-logo';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, CalendarDays, CircleCheck, CreditCard, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus, X,
+  Bell, CalendarDays, CircleCheck, CreditCard, Home, Inbox, LogOut, Settings, Sparkles, Sun, Timer, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -17,14 +17,14 @@ import { InstallPrompt } from './install-prompt';
 // AI Planner, Insights and Import and export are hidden from the web menus for now. Their pages
 // (/planner, /insights, /import-export) still exist and open by address.
 const DESKTOP = [
-  { href: '/', label: 'My Day', icon: Sun },
+  { href: '/', label: 'My Day', icon: Home },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/waiting', label: 'Waiting For', icon: Timer },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/billing', label: 'Plans and billing', icon: CreditCard },
-  { href: '/settings', label: 'Settings', icon: MoreHorizontal },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const MOBILE = [
@@ -53,31 +53,43 @@ export function AppShell({
     router.refresh();
   }
 
+  const initials = userName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'N';
+  const [plan, setPlan] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/billing', { cache: 'no-store', signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => { if (!controller.signal.aborted && typeof payload?.plan === 'string' && payload.plan) setPlan(`${payload.plan.charAt(0)}${payload.plan.slice(1).toLowerCase().replace(/_/g, ' ')} Plan`); })
+      .catch(() => { /* The plan line is simply left out. */ });
+    return () => controller.abort();
+  }, []);
+
   return (
     <FocusSessionProvider userId={userId}><OfflineBanner /><InstallPrompt /><div className="harbor-shell">
       <aside className="harbor-side border-r border-[var(--line)] bg-[var(--bg-elev)] p-5">
         <Link href="/" aria-label="Nexdo home"><NexdoLogo priority /></Link>
-        <p className="mt-2 text-lg font-semibold">{userName}</p>
-        <nav className="mt-6 flex flex-col gap-1" aria-label="Desktop">
+        <div className="side-user">
+          <span className="side-avatar" aria-hidden="true">{initials}</span>
+          <div className="min-w-0"><p>{userName}</p>{plan && <small>{plan}</small>}</div>
+        </div>
+        <nav className="side-nav" aria-label="Desktop">
           {DESKTOP.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--muted)]',
-                  active && 'bg-[var(--brand-soft)] text-[var(--brand)]',
-                )}
-              >
-                <Icon className="size-4" aria-hidden />
+              <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('side-link', active && 'is-active')}>
+                <Icon className="size-5" aria-hidden />
                 {item.label}
               </Link>
             );
           })}
         </nav>
-        <button type="button" onClick={logout} className="harbor-btn mt-8 w-full">Sign out</button>
+        <button type="button" onClick={logout} className="side-signout"><LogOut className="size-4" aria-hidden />Sign out</button>
+        <button type="button" className="side-ai" onClick={() => window.dispatchEvent(new Event('harbor:open-assistant'))}>
+          <Sparkles className="size-5" aria-hidden />
+          <strong>Nexdo AI</strong>
+          <span>Your personal AI productivity copilot</span>
+        </button>
       </aside>
 
       <div className="flex min-w-0 flex-col">
