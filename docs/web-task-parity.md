@@ -138,3 +138,12 @@ Quick Add → Reminder has a **Remind me by** choice: Pop-up, Email and Call (an
 - Switch: set `REMINDER_CALLS_ENABLED=false` to turn calls off; otherwise they are on wherever Twilio is configured.
 - Pop-up and Email choices are stored on `Task.notifyPush` / `Task.notifyEmail` and now narrow the account-wide
   notification settings for that reminder.
+
+## Reminders tab (Nov 21, 2026)
+
+Tasks page tabs are now Tasks, Folders, **Reminders**, Notes. The Reminders tab lists every reminder the person set
+(any task with its own reminder time), Upcoming first (soonest first), then History (newest first), with search.
+Each row shows the time, notes, "Repeats"/"Done", and a chip per chosen channel with its outcome (Pop-up/Email:
+Scheduled, Pending, Sent, Failed, Not sent; Call: Scheduled, Answered, Voicemail, Missed, Failed). Tapping a row
+opens the task details; "New Reminder" and the empty-state "Add New Reminder" open the reminder sheet.
+Data: `GET /api/reminders` (`src/server/reminder-history.ts`). The Notes empty state button reads "+ Add New Note".

@@ -26,7 +26,7 @@ export function NotesPanel({ notes, loaded, error, timeZone, onRetry, onOpen, on
       <Image src="/tasks/clipboard.webp" alt="" width={160} height={116} className="tk-empty-art" />
       <h2>{term ? 'No matching notes' : 'Keep a note'}</h2>
       <p>{term ? 'Try different words.' : 'Ideas, lists and details for later live here, next to your tasks.'}</p>
-      {!term && <button type="button" className="nx-outline-button" onClick={onNew}>New Note</button>}
+      {!term && <button type="button" className="nx-outline-button" onClick={onNew}><Plus size={17} aria-hidden="true" />Add New Note</button>}
     </div>}
     {shown.length > 0 && <div className="tk-note-grid">{shown.map((note) => <button key={note.id} type="button" className="tk-note" onClick={() => onOpen(note)} aria-label={`${note.title || 'Untitled note'}. Opens the note`}>
       <strong>{note.title || 'Untitled note'}</strong>

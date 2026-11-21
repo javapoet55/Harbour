@@ -20,6 +20,7 @@ import { FolderDetail, FolderList } from './task-folders';
 import { FocusTimerCard, usePomodoro } from './focus-timer';
 import { EventSheet, NoteSheet, ReminderSheet, type Note } from './quick-add-sheets';
 import { NotesPanel } from './notes-panel';
+import { RemindersPanel, type ReminderItem } from './reminders-panel';
 import './tasks-screen.css';
 import './tasks-dashboard.css';
 
@@ -60,12 +61,15 @@ export function TasksScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [notesError, setNotesError] = useState('');
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [remindersLoaded, setRemindersLoaded] = useState(false);
+  const [remindersError, setRemindersError] = useState('');
   const [userId, setUserId] = useState('');
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_TASK_FILTERS);
   const [sortChoice, setSortChoice] = useState<SortChoice>('Due Date');
   const [searchOpen, setSearchOpen] = useState(false);
   const [view, setView] = useState<View>('list');
-  const [tab, setTab] = useState<'tasks' | 'folders' | 'notes'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'folders' | 'reminders' | 'notes'>('tasks');
   const [openFolder, setOpenFolder] = useState<string | null | undefined>(undefined);
   const [collapsed, setCollapsed] = useState<Set<TaskBucket>>(new Set());
   const [creating, setCreating] = useState<{ folderId: string | null; title: string } | null>(null);
@@ -138,7 +142,21 @@ export function TasksScreen() {
       if (!signal?.aborted) setNotesError('Couldn’t load your notes.');
     }
   }, []);
-  const reload = useCallback(async () => { await Promise.all([loadTasks(), loadFolders()]); }, [loadTasks, loadFolders]);
+  const loadReminders = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch('/api/reminders', { cache: 'no-store', signal });
+      if (!response.ok) throw new Error('reminders');
+      const data = await response.json();
+      if (signal?.aborted) return;
+      setReminders(Array.isArray(data.reminders) ? data.reminders : []);
+      setRemindersLoaded(true);
+      setRemindersError('');
+    } catch {
+      if (!signal?.aborted) setRemindersError('Couldn’t load your reminders.');
+    }
+  }, []);
+  // Reminders are part of the task list, so anything that reloads tasks refreshes their history too.
+  const reload = useCallback(async () => { await Promise.all([loadTasks(), loadFolders(), loadReminders()]); }, [loadTasks, loadFolders, loadReminders]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -147,13 +165,14 @@ export function TasksScreen() {
     void loadTasks(controller.signal);
     void loadFolders(controller.signal);
     void loadNotes(controller.signal);
+    void loadReminders(controller.signal);
     fetch('/api/me', { cache: 'no-store', signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => { if (!controller.signal.aborted && data?.user?.id) setUserId(data.user.id); })
       .catch(() => { /* The timer and manual order wait for the account. */ });
     try { setOrders(parseTaskDisplayOrders(window.localStorage.getItem(TASK_DISPLAY_ORDERS_KEY))); } catch { /* Storage is optional. */ }
     return () => controller.abort();
-  }, [loadTasks, loadFolders, loadNotes]);
+  }, [loadTasks, loadFolders, loadNotes, loadReminders]);
 
   const idle = !creating && !quick && !noteSheet && !editingId && !busy && !completingId && !dragging && !adding;
   useEffect(() => {
@@ -352,9 +371,10 @@ export function TasksScreen() {
 
     <div className="tk-body">
       <div className="tk-tabs-row">
-        <div className="tk-tabs" role="tablist" aria-label="Tasks, folders and notes">
+        <div className="tk-tabs" role="tablist" aria-label="Tasks, folders, reminders and notes">
           <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}><List size={20} aria-hidden="true" />Tasks</button>
           <button type="button" role="tab" aria-selected={tab === 'folders'} onClick={() => setTab('folders')}><FolderIcon size={20} aria-hidden="true" />Folders</button>
+          <button type="button" role="tab" aria-selected={tab === 'reminders'} onClick={() => { setTab('reminders'); void loadReminders(); }}><Bell size={20} aria-hidden="true" />Reminders</button>
           <button type="button" role="tab" aria-selected={tab === 'notes'} onClick={() => setTab('notes')}><FileText size={20} aria-hidden="true" />Notes</button>
         </div>
         {tab === 'tasks' && <div className="tk-tools">
@@ -373,6 +393,7 @@ export function TasksScreen() {
       {tab === 'folders' ? (openFolder === undefined
         ? <FolderList folders={folders} tasks={tasks} loaded={foldersLoaded} error={foldersError} onRetry={() => void loadFolders()} onOpen={setOpenFolder} onChanged={reload} />
         : <FolderDetail folderId={openFolder} folders={folders} foldersLoaded={foldersLoaded} tasks={tasks} tasksLoading={loading} timeZone={zone} onBack={() => setOpenFolder(undefined)} onOpenTask={setEditingId} onAddTask={(folderId) => setCreating({ folderId, title: '' })} onChanged={reload} />)
+      : tab === 'reminders' ? <RemindersPanel reminders={reminders} loaded={remindersLoaded} error={remindersError} timeZone={zone} now={now} onRetry={() => void loadReminders()} onOpen={setEditingId} onNew={() => setQuick('reminder')} />
       : tab === 'notes' ? <NotesPanel notes={notes} loaded={notesLoaded} error={notesError} timeZone={zone} onRetry={() => void loadNotes()} onOpen={(note) => setNoteSheet({ note })} onNew={() => setNoteSheet({ note: null })} />
       : <div role="tabpanel" aria-label="Tasks">
         <form className="tk-add" onSubmit={(event) => { event.preventDefault(); void quickAdd(); }}>
