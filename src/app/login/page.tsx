@@ -30,11 +30,6 @@ export default function LoginPage() {
       setError('Those credentials were not accepted.');
       return;
     }
-    const body = await res.json().catch(() => ({}));
-    if (typeof body.adminAppUrl === 'string') {
-      window.location.assign(body.adminAppUrl);
-      return;
-    }
     router.push('/');
     router.refresh();
   }
