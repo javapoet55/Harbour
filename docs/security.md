@@ -58,7 +58,7 @@ Admin sessions last 8 hours at most and end after 60 idle minutes (`ADMIN_SESSIO
 
 ### Dependencies
 
-`.github/dependabot.yml` opens weekly update pull requests for the web app, the admin app, the mobile app and the workflows, and `.github/workflows/dependency-audit.yml` fails when a production dependency has a known high or critical vulnerability. Dependabot *alerts* are a repository setting: GitHub → Settings → Advanced Security → enable "Dependency graph", "Dependabot alerts" and "Dependabot security updates".
+`.github/dependabot.yml` opens weekly update pull requests for the web app, the admin app, the mobile app and the workflows, and `.github/workflows/dependency-audit.yml` fails when a production dependency of the web or admin app has a known high or critical vulnerability (`node scripts/audit-production.mjs` runs the same check locally). An advisory that cannot be fixed yet and does not affect the running app is recorded with its reason and a review date in `.github/audit-accepted.json`. Dependabot *alerts* are a repository setting: GitHub → Settings → Advanced Security → enable "Dependency graph", "Dependabot alerts" and "Dependabot security updates".
 
 ### Penetration test
 
