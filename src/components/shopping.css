@@ -1,0 +1,67 @@
+/* Shopping Lists on the web. Builds on the Tasks screen styles (tasks-screen.css). */
+.sp-wide { width: 100%; margin-top: 10px; }
+.sp-muted { font-size: 14px; color: #575c80; }
+.sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sp-confirm-actions { display: flex; gap: 12px; margin-top: 18px; }
+.sp-confirm-actions > button { flex: 1; min-height: 48px; }
+.sp-choices { display: grid; gap: 10px; }
+.sp-choices button { display: block; width: 100%; padding: 14px 16px; text-align: left; border-radius: 18px; background: #fff; border: 1px solid #d8d6e6; }
+.sp-choices button strong { display: block; font-size: 16px; }
+.sp-choices button small { display: block; margin-top: 4px; font-size: 13px; color: #575c80; }
+.sp-choices button[aria-pressed="true"] { border-color: #3d29f0; box-shadow: inset 0 0 0 1px #3d29f0; }
+.sp-choices button:disabled { opacity: .55; }
+
+.sp-lists { display: grid; gap: 10px; margin-top: 16px; }
+.sp-list-card { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 14px 16px; text-align: left; border-radius: 20px; background: rgb(255 255 255 / .9); border: 1px solid rgb(61 41 240 / .14); }
+.sp-list-card > svg { flex: 0 0 auto; color: #575c80; }
+.sp-list-card > span { flex: 1; min-width: 0; }
+.sp-list-card strong { display: block; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.sp-list-card small { display: block; margin-top: 4px; font-size: 13px; color: #575c80; }
+.sp-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #3d29c7; background: rgb(61 41 240 / .08); vertical-align: 2px; }
+.sp-heading { margin-top: 22px; font-size: 13px; font-weight: 700; letter-spacing: .8px; color: #3d29c7; }
+
+.sp-progress { margin-top: 14px; }
+.sp-progress progress { display: block; width: 100%; height: 6px; border: 0; border-radius: 999px; overflow: hidden; background: rgb(8 15 46 / .1); accent-color: #3d29f0; }
+.sp-progress progress::-webkit-progress-bar { background: rgb(8 15 46 / .1); }
+.sp-progress progress::-webkit-progress-value { background: #3d29f0; }
+.sp-progress progress::-moz-progress-bar { background: #3d29f0; }
+.sp-progress p { margin-top: 6px; font-size: 13px; color: #575c80; }
+
+.sp-add { display: flex; gap: 10px; margin-top: 16px; }
+.sp-add input { flex: 1; min-width: 0; min-height: 50px; padding: 0 14px; border-radius: 16px; font-size: 16px; background: #fff; border: 1px solid rgb(61 41 240 / .16); }
+.sp-add button { min-height: 50px; padding: 0 18px; border-radius: 16px; font-weight: 600; color: #fff; background: linear-gradient(180deg, #572bf2, #3d24c4); }
+.sp-suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.sp-suggest button { min-height: 36px; padding: 0 12px; border-radius: 999px; font-size: 14px; background: #fff; border: 1px solid rgb(61 41 240 / .16); }
+
+.sp-group { margin-top: 18px; }
+.sp-group h3 { font-size: 13px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #3d29c7; }
+.sp-items { display: grid; gap: 8px; margin-top: 8px; list-style: none; padding: 0; }
+.sp-item { display: flex; align-items: center; gap: 6px; min-height: 60px; padding: 6px 8px; border-radius: 16px; background: rgb(255 255 255 / .85); border: 1px solid rgb(61 41 240 / .06); }
+.sp-item.is-checked .sp-item-name { text-decoration: line-through; color: #575c80; }
+.sp-check { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; color: #575c80; }
+.sp-check[aria-checked="true"] { color: #3d29f0; }
+.sp-emoji { font-size: 22px; flex: 0 0 auto; }
+.sp-item-open { display: block; flex: 1; min-width: 0; min-height: 44px; padding: 4px 6px; text-align: left; border-radius: 12px; }
+.sp-item-name { display: block; font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
+.sp-item-sub { display: block; margin-top: 2px; font-size: 13px; color: #575c80; overflow-wrap: anywhere; }
+.sp-item-alt { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; color: #3d29f0; border-radius: 12px; }
+
+.sp-banner { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; font-size: 14px; color: #575c80; background: rgb(61 41 240 / .06); }
+.sp-banner button { margin-left: auto; min-height: 36px; padding: 0 12px; border-radius: 10px; font-weight: 600; color: #3d29c7; background: #fff; border: 1px solid #d8d6e6; }
+.sp-save-error { margin-top: 14px; padding: 14px; border-radius: 14px; font-size: 14px; color: #a12825; background: #fff3f2; border: 1px solid #f3cfcc; }
+.sp-save-error div { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.sp-save-error button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-weight: 600; background: #fff; border: 1px solid #f3cfcc; }
+.sp-saving { margin-top: 10px; font-size: 12px; color: #575c80; }
+
+.sp-alt-for { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.sp-alts { display: grid; gap: 10px; margin-top: 14px; list-style: none; padding: 0; }
+.sp-alts li { padding: 14px; border-radius: 18px; background: #fff; border: 1px solid #d8d6e6; }
+.sp-alts li p { margin-top: 6px; font-size: 14px; }
+.sp-facts { color: #3d29c7; font-size: 13px; }
+.sp-alt-actions { display: flex; gap: 8px; margin-top: 10px; }
+.sp-chip-action { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #3d29c7; background: rgb(61 41 240 / .07); }
+.sp-chip-action:disabled { opacity: .5; }
+.sp-tip { margin-top: 14px; font-size: 14px; color: #575c80; }
+.sp-link-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.sp-link-actions > button { min-height: 46px; flex: 1; }
+.sp-revoke { color: #c62828; }
