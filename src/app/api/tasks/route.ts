@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { createTask } from '@/server/tasks';
 import { scheduleDefaultReminders, scheduleRequestedReminder } from '@/server/reminders';
+import { assertReminderCallsUsable } from '@/server/reminder-calls';
 import { prisma } from '@/server/db';
 import { zonedDateTime } from '@/lib/time';
 import { pushTaskToExternal } from '@/server/calendar-sync';
@@ -58,8 +59,19 @@ async function healthHandlerPOST(req: Request) {
         ? zonedDateTime(body.date, body.time || '09:00', user.timeZone)
         : null;
     const startAt = intent.recognized && intent.reminderDate ? intent.reminderDate : suppliedStartAt;
+    // A reminder added by hand (web Quick Add → Reminder): a five-minute item that notifies at its own time,
+    // saved the same way the voice assistant saves a reminder.
+    const manualReminder = body.reminder === true && !intent.recognized && startAt !== null;
     const dueAt = intent.recognized ? intent.dueDate ?? startAt : startAt;
-    if (!existing && !intent.recognized) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
+    // How a hand-made reminder reaches the person: a pop-up (push), an email and/or a phone call that reads it aloud.
+    const delivery = manualReminder ? {
+      notifyPush: body.notifyPush !== false,
+      notifyEmail: body.notifyEmail !== false,
+      notifyCall: body.notifyCall === true,
+    } : {};
+    if (manualReminder && !delivery.notifyPush && !delivery.notifyEmail && !delivery.notifyCall) throw new Error('REMINDER_NO_DELIVERY');
+    if (!existing && delivery.notifyCall) await assertReminderCallsUsable(user.id);
+    if (!existing && !intent.recognized && !manualReminder) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
     const task = await createTask({
       userId: user.id,
       idempotencyKey,
@@ -70,20 +82,23 @@ async function healthHandlerPOST(req: Request) {
       status: body.status ?? 'PLANNED',
       startAt,
       dueAt,
-      reminderAt: intent.recognized ? intent.reminderDate : null,
-      lifeReminderType: intent.recognized ? intent.reminderType : null,
-      lifeReminderConfidence: intent.recognized ? intent.confidence : null,
-      originalUserText: intent.recognized ? intent.originalUserText : null,
-      durationMin: intent.recognized ? 5 : body.durationMin,
+      kind: manualReminder ? 'REMINDER' : undefined,
+      reminderAt: intent.recognized ? intent.reminderDate : manualReminder ? startAt : null,
+      lifeReminderType: intent.recognized ? intent.reminderType : manualReminder ? 'general' : null,
+      lifeReminderConfidence: intent.recognized ? intent.confidence : manualReminder ? 1 : null,
+      originalUserText: intent.recognized ? intent.originalUserText : manualReminder ? originalTitle : null,
+      durationMin: intent.recognized || manualReminder ? 5 : body.durationMin,
       energyLevel: ['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel) ? body.energyLevel : undefined,
       waitingOn: body.waitingOn,
       critical: Boolean(body.critical),
+      ...delivery,
     });
     const recurrence = intent.recognized ? intent.recurrenceRule : body.recurrence;
     if (recurrence?.frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(recurrence.frequency).toUpperCase())) {
       await prisma.recurrenceRule.upsert({ where: { taskId: task.id }, update: {}, create: { taskId: task.id, frequency: String(recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(recurrence.interval) || 1), byWeekday: Array.isArray(recurrence.byWeekday) ? recurrence.byWeekday.join(',') : null, until: recurrence.until ? new Date(recurrence.until) : null, count: recurrence.count ? Math.max(1, Number(recurrence.count)) : null } });
     }
-    if (task.reminderAt) await scheduleRequestedReminder(user.id, task.id, task.reminderAt, task.critical);
+    // A call-only reminder has nothing for the pop-up/email scheduler to send.
+    if (task.reminderAt) { if (task.notifyPush || task.notifyEmail) await scheduleRequestedReminder(user.id, task.id, task.reminderAt, task.critical); }
     else if (task.startAt) await scheduleDefaultReminders(user.id, task.id, task.dueAt ?? task.startAt, task.critical);
     if (startAt && !intent.recognized) await pushTaskToExternal(user.id, task.id);
     if (intent.recognized) {

@@ -12,6 +12,7 @@ const input = z.discriminatedUnion('action', [
   z.object({ action: z.literal('request'), email }),
   z.object({ action: z.literal('verify'), email, code: z.string().trim().regex(/^\d{6}$/) }),
   z.object({ action: z.literal('logout') }),
+  z.object({ action: z.literal('logout-everywhere') }),
 ]);
 const reply = (body: object, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const unavailable = () => reply({ error: 'Unable to sign in. Please try again shortly.' }, 503);
@@ -26,9 +27,11 @@ export async function POST(request: NextRequest) {
   const current = requestToken(request);
   const ip = clientIp(request);
   try {
-    if (body.action === 'logout') {
+    if (body.action === 'logout' || body.action === 'logout-everywhere') {
       if (current) {
-        const revoked = await backendFetch('/api/admin/session', { method: 'DELETE', token: current, clientIp: ip });
+        // "Sign out everywhere" ends every admin session of this account, on every browser.
+        const path = body.action === 'logout-everywhere' ? '/api/admin/session?everywhere=1' : '/api/admin/session';
+        const revoked = await backendFetch(path, { method: 'DELETE', token: current, clientIp: ip });
         // Keep the cookie when revocation failed so the user can retry; a 401 means it was already invalid.
         if (!revoked.ok && revoked.status !== 401) return reply({ error: 'Sign-out failed. Please try again.' }, 503);
       }
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
     setSessionCookie(response, session.data.token, session.data.expiresAt);
     return response;
   } catch (error) {
-    if (error instanceof BackendError && body.action === 'logout') return reply({ error: 'Sign-out failed. Please try again.' }, 503);
+    if (error instanceof BackendError && (body.action === 'logout' || body.action === 'logout-everywhere')) return reply({ error: 'Sign-out failed. Please try again.' }, 503);
     return unavailable();
   }
 }

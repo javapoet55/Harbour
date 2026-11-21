@@ -60,3 +60,64 @@ describe('retired /admin pages', () => {
     expect(visit('/admins/list').headers.get('location')).toBe('http://localhost/login');
   });
 });
+
+describe('cross-site writes', () => {
+  const send = (path: string, method: string, headers: Record<string, string> = {}) => middleware(new NextRequest(`http://localhost${path}`, { method, headers }));
+
+  it('refuses a write another site made the browser send, before any route runs', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const path of ['/api/tasks', '/api/auth/login', '/api/account', '/api/auth/logout-everywhere']) {
+      const response = send(path, path === '/api/account' ? 'DELETE' : 'POST', { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site', cookie: 'harbor_session=valid' });
+      expect(response.status, path).toBe(403);
+      expect(await response.json()).toMatchObject({ code: 'CROSS_SITE_REQUEST' });
+    }
+    expect(warn).toHaveBeenCalledTimes(4);
+    expect(String(warn.mock.calls[0][0])).toContain('csrf.blocked');
+    warn.mockRestore();
+  });
+
+  it("lets the app's own pages and the phone apps write", () => {
+    expect(send('/api/tasks', 'POST', { origin: 'http://localhost', 'sec-fetch-site': 'same-origin' }).status).toBe(200);
+    expect(send('/api/tasks', 'POST', { cookie: 'harbor_session=valid' }).status).toBe(200);
+    expect(send('/api/moments/tick', 'POST', { authorization: 'Bearer cron' }).status).toBe(200);
+  });
+
+  it('never blocks a read, wherever it comes from', () => {
+    expect(send('/api/tasks', 'GET', { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }).status).toBe(200);
+  });
+});
+
+describe('page content security policy', () => {
+  const visit = (path: string, cookie = 'harbor_session=valid') => middleware(new NextRequest(`http://localhost${path}`, { headers: { cookie } }));
+  const nonceOf = (response: Response) => /'nonce-([^']+)'/.exec(response.headers.get('content-security-policy') ?? '')?.[1];
+
+  it('gives every page a policy with its own nonce and hands the nonce to the renderer', () => {
+    const first = visit('/tasks');
+    const second = visit('/tasks');
+    expect(nonceOf(first)).toBeTruthy();
+    expect(nonceOf(first)).not.toBe(nonceOf(second));
+    // NextResponse.next({ request }) forwards overridden request headers under this prefix.
+    expect(first.headers.get('x-middleware-request-x-nonce')).toBe(nonceOf(first));
+    expect(first.headers.get('x-middleware-request-content-security-policy')).toBe(first.headers.get('content-security-policy'));
+  });
+
+  it('covers public pages too: login, sign-up and shared links', () => {
+    for (const path of ['/login', '/signup', '/welcome', '/s/abc', '/shared/shopping/abc']) expect(nonceOf(visit(path, '')), path).toBeTruthy();
+  });
+
+  it('never trusts a nonce sent by the client', () => {
+    const response = middleware(new NextRequest('http://localhost/tasks', { headers: { cookie: 'harbor_session=valid', 'x-nonce': 'attacker' } }));
+    expect(response.headers.get('x-middleware-request-x-nonce')).not.toBe('attacker');
+  });
+
+  it('leaves JSON APIs and files alone', () => {
+    for (const path of ['/api/tasks', '/manifest.json', '/sw.js']) expect(visit(path).headers.get('content-security-policy'), path).toBeNull();
+  });
+
+  it('only reports when CSP_REPORT_ONLY is true', () => {
+    vi.stubEnv('CSP_REPORT_ONLY', 'true');
+    const response = visit('/tasks');
+    expect(response.headers.get('content-security-policy')).toBeNull();
+    expect(response.headers.get('content-security-policy-report-only')).toContain("'strict-dynamic'");
+  });
+});

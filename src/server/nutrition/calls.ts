@@ -1,4 +1,5 @@
 import { voiceTokenReceipt } from '@/lib/voice-tokens';
+import { takeAiQuota } from '@/server/ai-quota';
 import { recordVoiceTokens } from '@/server/voice/tokens';
 import { inc } from '@/lib/metrics';
 import { z } from 'zod';
@@ -91,6 +92,7 @@ export async function requestCallNow(userId: string, now = new Date()) {
   const settings = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
   if (!settings?.phoneVerifiedAt || !settings.phoneE164) throw new NutritionError('PHONE_NOT_VERIFIED');
   if (!withinCallWindow(settings.timeZone, now)) throw new NutritionError('OUTSIDE_CALL_WINDOW');
+  await takeAiQuota({ id: userId, timeZone: settings.timeZone }, 'checkin_call', now);
   const localDate = localDateIn(settings.timeZone, now);
   const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate, attempt: { gt: MANUAL_ATTEMPT_BASE } }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
   const attempt = Math.max(MANUAL_ATTEMPT_BASE, last?.attempt ?? 0) + 1;

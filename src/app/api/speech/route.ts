@@ -1,4 +1,5 @@
 import { voiceAllowanceResponse } from '@/server/voice/usage';
+import { refundAiQuota, takeAiQuota } from '@/server/ai-quota';
 import { speechAudio } from '@/server/voice/speech-stream';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
@@ -20,6 +21,7 @@ async function healthHandlerPOST(req: Request) {
     if (!apiKey) return Response.json({ error: 'OpenAI voice is not configured.' }, { status: 503 });
     const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
     if (allowance) return allowance;
+    await takeAiQuota(user, 'spoken_replies');
     const response = await observedFetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -30,7 +32,7 @@ async function healthHandlerPOST(req: Request) {
       }),
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)]),
     });
-    if (!response.ok) return Response.json({ error: 'OpenAI voice is temporarily unavailable. You can still read the answer.' }, { status: 502 });
+    if (!response.ok) { await refundAiQuota(user, 'spoken_replies'); return Response.json({ error: 'OpenAI voice is temporarily unavailable. You can still read the answer.' }, { status: 502 }); }
     return new Response(await speechAudio(response) as BodyInit, {
       headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, no-store' },
     });

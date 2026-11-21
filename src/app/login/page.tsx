@@ -1,63 +1,87 @@
 'use client';
 
-import { useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { NexdoLogo } from '@/components/nexdo-logo';
-import { PasswordInput } from '@/components/password-input';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Mail } from 'lucide-react';
+import { AuthAlert, AuthButton, AuthField, AuthPassword, AuthShell } from '@/components/auth/auth-ui';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const passwordWasReset = useSearchParams().get('reset') === 'complete';
   const [email, setEmail] = useState(process.env.NODE_ENV === 'production' ? '' : 'alex@harbor.app');
   const [password, setPassword] = useState(process.env.NODE_ENV === 'production' ? '' : 'harbor-demo');
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setError('');
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      if (body.code === 'EMAIL_NOT_VERIFIED') {
-      if (typeof body.verificationProof === 'string') sessionStorage.setItem('nexdo-verification-proof', body.verificationProof);
-        router.push(`/verify-email?email=${encodeURIComponent(body.email || email)}&reason=unverified`);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, remember }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body.code === 'EMAIL_NOT_VERIFIED') {
+          if (typeof body.verificationProof === 'string') sessionStorage.setItem('nexdo-verification-proof', body.verificationProof);
+          router.push(`/verify-email?email=${encodeURIComponent(body.email || email)}&reason=unverified`);
+          return;
+        }
+        setError('Those credentials were not accepted.');
         return;
       }
-      setError('Those credentials were not accepted.');
-      return;
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Could not connect. Please check your connection and try again.');
+    } finally {
+      setBusy(false);
     }
-    const body = await res.json().catch(() => ({}));
-    if (typeof body.adminAppUrl === 'string') {
-      window.location.assign(body.adminAppUrl);
-      return;
-    }
-    router.push('/');
-    router.refresh();
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5">
-      <Link href="/welcome" className="nexdo-login-brand" aria-label="Nexdo home"><NexdoLogo priority /></Link>
-      <h1 className="mt-2 text-3xl font-semibold">Ask what is coming up.</h1>
-      <p className="mt-2 text-[var(--muted)]">Sign in to see your tasks, calendar, and personal briefing.</p>
-      <form onSubmit={onSubmit} className="harbor-card mt-6 space-y-3 p-5">
-        <label className="block text-sm font-medium">
-          Email
-          <input className="harbor-input mt-1" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-        </label>
-        <label className="block text-sm font-medium">
-          Password
-          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-        </label>
-        <div className="text-right"><Link className="text-sm font-medium text-[var(--brand)] hover:underline" href="/reset-password">Forgot password?</Link></div>
-        {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-        <button className="harbor-btn harbor-btn-brand w-full" type="submit">Sign in</button>
+    <>
+      <h2>Log in to NexDo</h2>
+      <p className="au-panel-lede">See your tasks, calendar, and Daily Brief.</p>
+      <form onSubmit={onSubmit} className="au-form">
+        {passwordWasReset && <AuthAlert kind="ok">Your password has been reset. Log in with your new password.</AuthAlert>}
+        <AuthField label="Email address" icon={Mail} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="username" required />
+        <AuthPassword label="Password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required />
+        <div className="au-row">
+          <label className="au-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />Remember me</label>
+          <Link className="au-link" href="/reset-password">Forgot password?</Link>
+        </div>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <AuthButton type="submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</AuthButton>
       </form>
-      <p className="mt-4 text-center text-sm text-[var(--muted)]">New to Nexdo? <Link className="font-semibold text-[var(--brand)] hover:underline" href="/signup">Create an account</Link></p>
-    </main>
+      <div className="au-foot">
+        <p className="au-note">New to NexDo? <Link className="au-link" href="/signup">Create an account</Link></p>
+      </div>
+    </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthShell
+      scene="login"
+      aside={<>
+        <h1>Welcome back <span>Your day is waiting.</span></h1>
+        <p className="au-lede">Pick up where you left off: today’s plan, your calendar, and what needs you next.</p>
+        <div className="au-focus">
+          <Image src="/auth/target.webp" alt="" width={240} height={224} />
+          <p><b>Stay focused today.</b><span>Plan, prioritize, and move forward with confidence.</span></p>
+        </div>
+      </>}
+    >
+      {/* useSearchParams needs a Suspense boundary. */}
+      <Suspense fallback={<h2>Log in to NexDo</h2>}><LoginForm /></Suspense>
+    </AuthShell>
   );
 }

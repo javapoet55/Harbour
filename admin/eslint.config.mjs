@@ -5,6 +5,8 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // User and AI text is rendered as escaped React text only, never as raw HTML.
+  { rules: { "react/no-danger": "error" } },
   globalIgnores([
     ".next/**",
     "out/**",

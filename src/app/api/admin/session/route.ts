@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { healthRoute } from '@/server/health/telemetry';
 import { z } from 'zod';
-import { adminUserForSession, revokeAdminSession } from '@/server/admin-otp';
+import { adminUserForSession, revokeAdminSession, revokeAdminSessionsForUser } from '@/server/admin-otp';
 import { adminBearerToken, adminClientAuthorized } from '@/server/admin-session';
 import { requestAdminCodeApi, verifyAdminCodeApi } from '@/server/admin-api-session';
 import { adminAudit, adminIpTarget } from '@/server/admin-audit';
@@ -52,8 +52,13 @@ async function healthHandlerDELETE(request: Request) {
   const token = adminBearerToken(request.headers);
   if (!token) return reply({ error: 'Admin sign-in required' }, 401);
   const user = await adminUserForSession(token);
-  await revokeAdminSession(token);
-  if (user) await adminAudit(user.id, 'ADMIN_LOGOUT', adminIpTarget(request.headers.get('x-admin-client-ip')), 'Signed out of admin frontend');
+  // ?everywhere=1 is "Sign out everywhere": every admin session of this account ends, not only this one.
+  // It needs a live session; a dead token can end nothing but itself.
+  const everywhere = new URL(request.url).searchParams.get('everywhere') === '1';
+  if (everywhere && !user) return reply({ error: 'Admin sign-in required' }, 401);
+  if (everywhere && user) await revokeAdminSessionsForUser(user.id);
+  else await revokeAdminSession(token);
+  if (user) await adminAudit(user.id, 'ADMIN_LOGOUT', adminIpTarget(request.headers.get('x-admin-client-ip')), everywhere ? 'Signed out of admin frontend on every browser' : 'Signed out of admin frontend');
   return new Response(null, { status: 204, headers });
 }
 

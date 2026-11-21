@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/server/db';
 const session = vi.hoisted(() => ({ id: '' }));
-vi.mock('@/server/session', () => ({ readUserId: async () => session.id || null }));
+vi.mock('@/server/session', () => ({ readSession: async () => session.id ? { userId: session.id, sessionId: null, issuedAt: new Date() } : null }));
 import { PATCH } from './route';
 import { GET } from '../me/route';
 

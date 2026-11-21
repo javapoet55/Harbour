@@ -1,4 +1,5 @@
 import { healthRoute } from '@/server/health/telemetry';
+import { takeAiQuota } from '@/server/ai-quota';
 import { generateGreetingArtwork, saveGreetingCard } from '@/server/moments/greeting-card';
 import { saveFestival, deleteFestival, festivalCatalog } from '@/server/moments/festival';
 import { NextResponse } from 'next/server';
@@ -20,12 +21,12 @@ async function healthHandlerPOST(req:Request) {
   const p=z.object({operation:z.string(),input:z.unknown().optional(),id:z.string().optional()}).parse(JSON.parse(raw));
   switch(p.operation) {
    case 'greetingCardSave': return NextResponse.json(await saveGreetingCard(user.id,p.input));
-   case 'greetingArtwork': return NextResponse.json(await generateGreetingArtwork(user.id,p.input,req.signal));
+   case 'greetingArtwork': await takeAiQuota(user,'greeting_art'); return NextResponse.json(await generateGreetingArtwork(user.id,p.input,req.signal));
    case 'festivalSave': return NextResponse.json(await saveFestival(user.id,p.input));
    case 'festivalDelete': return NextResponse.json(await deleteFestival(user.id,p.input));
    case 'festivalCatalog': return NextResponse.json({entries:festivalCatalog()});
    case 'save': return NextResponse.json({moment:await saveMoment(user.id,p.input,p.id)});
-   case 'generate': return NextResponse.json(await generateDraft(user.id,p.input));
+   case 'generate': if((p.input as {aiConsent?:unknown}|undefined)?.aiConsent===true) await takeAiQuota(user,'greeting_wish'); return NextResponse.json(await generateDraft(user.id,p.input));
    case 'approve': return NextResponse.json({draft:await approveDraft(user.id,p.input)});
    case 'schedule': { const plan=await schedule(user.id,p.input); if(plan.automaticDelivery&&plan.scheduledAtUTC<=new Date()) await runJobs(undefined,plan.id);return NextResponse.json({plan:await prisma.deliveryPlan.findUnique({where:{id:plan.id}})}); }
    case 'sendGreetingNow': {
