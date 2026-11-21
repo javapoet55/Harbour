@@ -75,8 +75,12 @@ No server changes were needed. The web uses the same endpoints as the phone: `GE
 
 These apply to the web app only, not to the phone apps:
 
-- AI Planner, Insights and Import and export are hidden from the side menu and the mobile More menu.
-  The pages still open by address.
+- Inbox, AI Planner, Insights and Import and export are hidden from the side menu and the mobile More
+  menu. The pages still open by address.
+- Tasks sits above Calendar in the side menu. The plan label under the account name is not shown.
+- The side menu carries a "download Mobile App" prompt with the QR code from the nexdoapp.com hero
+  (`public/nexdo-hero-tracked-qr.png`, copied from the marketing site's `assets/`). It is the hero's
+  tracked code, so scans from the web app are counted together with scans from the marketing hero.
 - The microphone in the Ask Nexdo bar and its "Voice is …" line are hidden (`SHOW_MIC` in
   `src/components/voice-dock.tsx`).
 - The "Install Nexdo" banner is hidden (`src/components/install-prompt.tsx`).
