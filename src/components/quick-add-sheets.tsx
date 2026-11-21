@@ -16,22 +16,22 @@ function nextHour(timeZone: string, now = Date.now()) {
   return { date: ymdInZone(+next, timeZone), time: `${parts.hour}:${parts.minute}` };
 }
 /** The date and "HH:mm" of an instant in the account's zone. */
-function localParts(ms: number, timeZone: string) {
+export function localParts(ms: number, timeZone: string) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
   return { date: ymdInZone(ms, timeZone), time: `${parts.hour}:${parts.minute}` };
 }
-function addMinutes(time: string, minutes: number) {
+export function addMinutes(time: string, minutes: number) {
   const [hour, minute] = time.split(':').map(Number);
   const total = Math.min(23 * 60 + 59, hour * 60 + minute + minutes);
   return `${String(Math.trunc(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 /** The instant for a date and time in the account's zone, or null when that local time does not exist. */
-function instant(date: string, time: string, timeZone: string): number | null {
+export function instant(date: string, time: string, timeZone: string): number | null {
   try { return +zonedDateTime(date, time, timeZone); } catch { return null; }
 }
 
 /** A bottom sheet on phones and a centred dialog on wider screens, with the same header as Create New Task. */
-function Sheet({ id, title, busy, canSave, saveLabel, onClose, onSubmit, children, footer }: {
+export function Sheet({ id, title, busy, canSave, saveLabel, onClose, onSubmit, children, footer }: {
   id: string; title: string; busy: boolean; canSave: boolean; saveLabel: string; onClose: () => void; onSubmit: () => void; children: React.ReactNode; footer?: React.ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
