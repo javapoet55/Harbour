@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { NexdoLogo } from './nexdo-logo';
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, CalendarDays, CircleCheck, CreditCard, Home, Inbox, LogOut, Settings, Sparkles, Sun, Timer, Plus, X,
+  Bell, CalendarDays, CircleCheck, CreditCard, Home, LogOut, Settings, Sparkles, Sun, Timer, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -14,13 +14,12 @@ import { FocusSessionProvider, FocusSessionBanner } from './focus-session';
 import { OfflineBanner } from './offline-banner';
 import { InstallPrompt } from './install-prompt';
 
-// AI Planner, Insights and Import and export are hidden from the web menus for now. Their pages
-// (/planner, /insights, /import-export) still exist and open by address.
+// Inbox, AI Planner, Insights and Import and export are hidden from the web menus for now. Their pages
+// (/inbox, /planner, /insights, /import-export) still exist and open by address.
 const DESKTOP = [
   { href: '/', label: 'My Day', icon: Home },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/waiting', label: 'Waiting For', icon: Timer },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/billing', label: 'Plans and billing', icon: CreditCard },
@@ -54,23 +53,13 @@ export function AppShell({
   }
 
   const initials = userName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'N';
-  const [plan, setPlan] = useState('');
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/billing', { cache: 'no-store', signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => { if (!controller.signal.aborted && typeof payload?.plan === 'string' && payload.plan) setPlan(`${payload.plan.charAt(0)}${payload.plan.slice(1).toLowerCase().replace(/_/g, ' ')} Plan`); })
-      .catch(() => { /* The plan line is simply left out. */ });
-    return () => controller.abort();
-  }, []);
-
   return (
     <FocusSessionProvider userId={userId}><OfflineBanner /><InstallPrompt /><div className="harbor-shell">
       <aside className="harbor-side border-r border-[var(--line)] bg-[var(--bg-elev)] p-5">
         <Link href="/" aria-label="Nexdo home"><NexdoLogo priority /></Link>
         <div className="side-user">
           <span className="side-avatar" aria-hidden="true">{initials}</span>
-          <div className="min-w-0"><p>{userName}</p>{plan && <small>{plan}</small>}</div>
+          <p className="min-w-0">{userName}</p>
         </div>
         <nav className="side-nav" aria-label="Desktop">
           {DESKTOP.map((item) => {
@@ -85,6 +74,11 @@ export function AppShell({
           })}
         </nav>
         <button type="button" onClick={logout} className="side-signout"><LogOut className="size-4" aria-hidden />Sign out</button>
+        <a className="side-app" href="https://www.nexdoapp.com/get-app" target="_blank" rel="noopener noreferrer" aria-label="Get the Nexdo mobile app. Opens in a new tab">
+          <span>For better experience and more features, download Mobile App.</span>
+          <Image src="/nexdo-hero-tracked-qr.png" alt="QR code to download Nexdo" width={112} height={112} />
+          <small>Scan with your phone camera</small>
+        </a>
         <button type="button" className="side-ai" onClick={() => window.dispatchEvent(new Event('harbor:open-assistant'))}>
           <Sparkles className="size-5" aria-hidden />
           <strong>Nexdo AI</strong>

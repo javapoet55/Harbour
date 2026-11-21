@@ -28,7 +28,6 @@ No endpoint was added or changed.
 | Upcoming (Next 3 Days) | The agenda's next three days |
 | Search | Tasks from `GET /api/tasks` (title and notes) and the agenda's events, matched in the browser |
 | Weather | `GET /api/weather` with the same fixed location as before (ZIP 94582) |
-| Plan label in the side menu | `GET /api/billing` |
 
 ## What each control does
 
